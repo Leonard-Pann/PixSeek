@@ -1,0 +1,36 @@
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Styles.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="CanvasBrush">#FAFAFC</SolidColorBrush>
+          <SolidColorBrush x:Key="SurfaceBrush">#FFFFFF</SolidColorBrush>
+          <SolidColorBrush x:Key="SidebarBrush">#F0F1F7</SolidColorBrush>
+          <SolidColorBrush x:Key="InkBrush">#202239</SolidColorBrush>
+          <SolidColorBrush x:Key="MutedBrush">#74778C</SolidColorBrush>
+          <SolidColorBrush x:Key="LineBrush">#E6E7F0</SolidColorBrush>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="CanvasBrush">#13151D</SolidColorBrush>
+          <SolidColorBrush x:Key="SurfaceBrush">#1D202C</SolidColorBrush>
+          <SolidColorBrush x:Key="SidebarBrush">#191B26</SolidColorBrush>
+          <SolidColorBrush x:Key="InkBrush">#F1F1FA</SolidColorBrush>
+          <SolidColorBrush x:Key="MutedBrush">#AAAEC4</SolidColorBrush>
+          <SolidColorBrush x:Key="LineBrush">#303446</SolidColorBrush>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+      <SolidColorBrush x:Key="AccentBrush">#6867DF</SolidColorBrush>
+    </ResourceDictionary>
+  </Styles.Resources>
+  <Style Selector="TextBlock"><Setter Property="Foreground" Value="{DynamicResource InkBrush}" /></Style>
+  <Style Selector="TextBlock.title"><Setter Property="FontSize" Value="28" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="TextBlock.subtitle"><Setter Property="FontSize" Value="15" /><Setter Property="Foreground" Value="{DynamicResource MutedBrush}" /><Setter Property="TextWrapping" Value="Wrap" /></Style>
+  <Style Selector="TextBlock.section"><Setter Property="FontSize" Value="18" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="Button"><Setter Property="CornerRadius" Value="10" /><Setter Property="Padding" Value="18,11" /><Setter Property="Cursor" Value="Hand" /></Style>
+  <Style Selector="Button.primary"><Setter Property="Background" Value="{DynamicResource AccentBrush}" /><Setter Property="Foreground" Value="White" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="Button.nav"><Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="HorizontalContentAlignment" Value="Left" /><Setter Property="Background" Value="Transparent" /><Setter Property="Padding" Value="18,14" /><Setter Property="Margin" Value="0,3" /></Style>
+  <Style Selector="Button.nav:pointerover"><Setter Property="Background" Value="#226867DF" /></Style>
+  <Style Selector="Border.card"><Setter Property="Background" Value="{DynamicResource SurfaceBrush}" /><Setter Property="CornerRadius" Value="18" /><Setter Property="Padding" Value="24" /><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" /><Setter Property="BorderThickness" Value="1" /></Style>
+  <Style Selector="TextBox"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="14,11" /></Style>
+  <Style Selector="ComboBox"><Setter Property="CornerRadius" Value="8" /><Setter Property="MinWidth" Value="120" /></Style>
+</Styles>

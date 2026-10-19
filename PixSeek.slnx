@@ -1,0 +1,9 @@
+<Solution>
+  <Project Path="PixSeek.Desktop/PixSeek.Desktop.csproj" />
+  <Project Path="PixSeek/PixSeek.csproj" />
+  <Project Path="src/PixSeek.Core/PixSeek.Core.csproj" />
+  <Project Path="src/PixSeek.Infrastructure/PixSeek.Infrastructure.csproj" />
+  <Project Path="src/PixSeek.Media/PixSeek.Media.csproj" />
+  <Project Path="src/PixSeek.AI/PixSeek.AI.csproj" />
+  <Project Path="tests/PixSeek.Tests/PixSeek.Tests.csproj" />
+</Solution>

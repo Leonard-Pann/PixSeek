@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>PixSeek</RootNamespace>
+    <OutputType>WinExe</OutputType>
+    <!--If you are willing to use platform-specific APIs, use conditional compilation.
+    See https://docs.avaloniaui.net/docs/guides/platforms/platform-specific-code/dotnet for more details.-->
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AssemblyName>PixSeek</AssemblyName>
+    <PackageId>PixSeek.Desktop</PackageId>
+    <PixSeekNativeRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</PixSeekNativeRid>
+    <PixSeekNativeRid Condition="'$(RuntimeIdentifier)' == ''">$(NETCoreSdkRuntimeIdentifier)</PixSeekNativeRid>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../runtimes/$(PixSeekNativeRid)/applocal/*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <PackageReference Include="Avalonia.Desktop" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PixSeek\PixSeek.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../runtimes/$(PixSeekNativeRid)/native/**/*" Exclude="../runtimes/**/*.lib;../runtimes/**/*.jar;../runtimes/**/cmake/**/*;../runtimes/**/pkgconfig/**/*" Link="runtimes/$(PixSeekNativeRid)/native/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../licenses/**/*" Link="licenses/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="../THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

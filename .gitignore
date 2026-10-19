@@ -55,3 +55,9 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+.vs/
+runtimes/*/native/*
+!runtimes/*/native/.gitkeep
+runtimes/*/applocal/*.dll
+
+TestDataset

@@ -1,0 +1,38 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:PixSeek.ViewModels" x:Class="PixSeek.Views.HomeView" x:DataType="vm:MainViewModel">
+  <ScrollViewer>
+    <StackPanel Spacing="24" Margin="36,20,36,32">
+      <Border CornerRadius="26" Background="#E9E9FF" Padding="40,36">
+        <Grid ColumnDefinitions="*,170">
+          <StackPanel Spacing="18" MaxWidth="640" HorizontalAlignment="Left">
+            <TextBlock Text="VOTRE PHOTOTHÈQUE, EN TOUTE LIBERTÉ" Foreground="#6664B7" FontWeight="SemiBold" FontSize="11" LetterSpacing="2" />
+            <TextBlock Text="Vos souvenirs,&#10;retrouvés instantanément." Foreground="#242344" FontSize="38" FontWeight="SemiBold" TextWrapping="Wrap" LineHeight="46" />
+            <TextBlock Text="Explorez vos photos et vidéos avec l'intelligence artificielle, directement sur votre ordinateur." Foreground="#656383" FontSize="16" TextWrapping="Wrap" MaxWidth="510" />
+            <WrapPanel Orientation="Horizontal">
+              <Button Content="＋  Ajouter un dossier" Classes="primary" Command="{Binding AddFolderCommand}" Margin="0,8,12,0" />
+              <Button Content="Découvrir l'application" Command="{Binding NavigateCommand}" CommandParameter="4" Margin="0,8,0,0" />
+            </WrapPanel>
+          </StackPanel>
+          <Grid Grid.Column="1" VerticalAlignment="Center" Height="190" IsHitTestVisible="False">
+            <Border Background="#C8C7F2" CornerRadius="24" Width="120" Height="146" RenderTransform="rotate(-12deg)" HorizontalAlignment="Left" />
+            <Border Background="#FFFFFF" CornerRadius="20" Width="126" Height="152" RenderTransform="rotate(10deg)" HorizontalAlignment="Right" Padding="10">
+              <Grid Background="#D8E7E5" ClipToBounds="True"><Ellipse Fill="#F6D58E" Width="34" Height="34" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="12" /><Path Data="M 0,120 L 46,40 L 100,120 Z" Fill="#8EB5A5" Stretch="UniformToFill" VerticalAlignment="Bottom" Height="80" /></Grid>
+            </Border>
+          </Grid>
+        </Grid>
+      </Border>
+      <TextBlock Text="Votre bibliothèque, d'un coup d'œil" Classes="section" />
+      <UniformGrid Columns="5" Rows="1">
+        <Border Classes="card" Margin="0,0,12,0"><StackPanel Spacing="8"><TextBlock Text="{Binding Photos}" FontSize="30" FontWeight="SemiBold" /><TextBlock Text="Photos" Classes="subtitle" /></StackPanel></Border>
+        <Border Classes="card" Margin="0,0,12,0"><StackPanel Spacing="8"><TextBlock Text="{Binding Videos}" FontSize="30" FontWeight="SemiBold" /><TextBlock Text="Vidéos" Classes="subtitle" /></StackPanel></Border>
+        <Border Classes="card" Margin="0,0,12,0"><StackPanel Spacing="8"><TextBlock Text="{Binding FolderCount}" FontSize="30" FontWeight="SemiBold" /><TextBlock Text="Dossiers" Classes="subtitle" /></StackPanel></Border>
+        <Border Classes="card" Margin="0,0,12,0"><StackPanel Spacing="8"><TextBlock Text="{Binding Indexed}" FontSize="30" FontWeight="SemiBold" /><TextBlock Text="Indexés" Classes="subtitle" /></StackPanel></Border>
+        <Border Classes="card"><StackPanel Spacing="8"><TextBlock Text="{Binding Pending}" FontSize="30" FontWeight="SemiBold" /><TextBlock Text="À analyser" Classes="subtitle" /></StackPanel></Border>
+      </UniformGrid>
+      <Grid ColumnDefinitions="*,*">
+        <Border Classes="card" Margin="0,0,12,0"><StackPanel Spacing="14"><TextBlock Text="Un souvenir en quelques mots" Classes="section" /><TextBlock Text="Un chien dans la neige, une soirée à table… Décrivez ce que vous cherchez." Classes="subtitle" /><Button Content="Explorer la recherche  →" Command="{Binding NavigateCommand}" CommandParameter="2" HorizontalAlignment="Left" /></StackPanel></Border>
+        <Border Grid.Column="1" Classes="card"><StackPanel Spacing="14"><TextBlock Text="Plus de souvenirs. Moins d'espace." Classes="section" /><TextBlock Text="JPEG XL pour vos photos, AV1 pour vos vidéos. Vos originaux restent à leur place." Classes="subtitle" /><Button Content="Gagner de la place  →" Command="{Binding NavigateCommand}" CommandParameter="3" HorizontalAlignment="Left" /></StackPanel></Border>
+      </Grid>
+      <TextBlock Text="{Binding AiStatus}" Classes="subtitle" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

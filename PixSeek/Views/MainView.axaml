@@ -1,0 +1,26 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:PixSeek.ViewModels" xmlns:views="using:PixSeek.Views" x:Class="PixSeek.Views.MainView" x:DataType="vm:MainViewModel" Background="{DynamicResource CanvasBrush}">
+  <Grid x:Name="RootLayout">
+    <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,*,Auto" IsEnabled="{Binding !IsCompressionDialogOpen}">
+      <Border Grid.RowSpan="4" Width="{Binding SidebarWidth}" Background="{DynamicResource SidebarBrush}" Padding="14,26,14,18">
+        <Grid RowDefinitions="Auto,Auto,*,Auto">
+          <StackPanel Orientation="Horizontal" Spacing="11" Margin="12,0,0,36"><Border Background="{DynamicResource AccentBrush}" CornerRadius="12" Width="38" Height="38"><TextBlock Text="✦" Foreground="White" FontSize="29" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border><TextBlock Text="PixSeek" FontSize="25" FontWeight="SemiBold" VerticalAlignment="Center" IsVisible="{Binding SidebarExpanded}" /></StackPanel>
+          <StackPanel Grid.Row="1">
+            <Button Classes="nav" Command="{Binding NavigateCommand}" CommandParameter="1" ToolTip.Tip="Photothèque"><StackPanel Orientation="Horizontal" Spacing="15"><TextBlock Text="▦" FontSize="20" /><TextBlock Text="Photothèque" IsVisible="{Binding SidebarExpanded}" /></StackPanel></Button>
+            <Button Classes="nav" Command="{Binding NavigateCommand}" CommandParameter="3" ToolTip.Tip="Compresser"><StackPanel Orientation="Horizontal" Spacing="15"><TextBlock Text="⇣" FontSize="20" /><TextBlock Text="Compresser" IsVisible="{Binding SidebarExpanded}" /></StackPanel></Button>
+            <Button Classes="nav" Command="{Binding NavigateCommand}" CommandParameter="4" ToolTip.Tip="Paramètres"><StackPanel Orientation="Horizontal" Spacing="15"><TextBlock Text="⚙" FontSize="20" /><TextBlock Text="Paramètres" IsVisible="{Binding SidebarExpanded}" /></StackPanel></Button>
+          </StackPanel>
+          <StackPanel Grid.Row="3" Spacing="16"><TextBlock Text="LOCAL. PRIVÉ. À VOUS." Classes="subtitle" FontSize="10" HorizontalAlignment="Center" IsVisible="{Binding SidebarExpanded}" /><Button Content="☰" Command="{Binding ToggleSidebarCommand}" HorizontalAlignment="Center" ToolTip.Tip="Réduire la navigation" /></StackPanel>
+        </Grid>
+      </Border>
+      <TextBlock Grid.Column="1" Text="{Binding PageTitle}" Classes="title" IsVisible="{Binding !IsGallery}" Margin="36,26,36,20" />
+      <Border Grid.Column="1" Grid.Row="1" IsVisible="{Binding HasError}" Background="#22E58467" CornerRadius="12" Margin="30,8,30,12" Padding="16"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding ErrorMessage}" TextWrapping="Wrap" MaxHeight="120" /><Button Grid.Column="1" Content="Fermer" Command="{Binding DismissErrorCommand}" Margin="16,0,0,0" /></Grid></Border>
+      <Grid Grid.Column="1" Grid.Row="2"><views:HomeView IsVisible="{Binding IsHome}" /><Grid IsVisible="{Binding IsGallery}"><views:LibraryView DataContext="{Binding Library}" /></Grid><views:SettingsView IsVisible="{Binding IsSettings}" /></Grid>
+      <Border Grid.Column="1" Grid.Row="3" BorderBrush="{DynamicResource LineBrush}" BorderThickness="0,1,0,0" Padding="30,10"><Grid ColumnDefinitions="*,Auto,Auto"><StackPanel Spacing="6"><TextBlock Text="{Binding Status}" Classes="subtitle" FontSize="12" TextTrimming="CharacterEllipsis" /><ProgressBar IsVisible="{Binding IsIndexing}" IsIndeterminate="{Binding IsIndexProgressIndeterminate}" Value="{Binding IndexProgress}" Height="4" /></StackPanel><Button Grid.Column="1" Content="Pause / Reprise" IsVisible="{Binding IsIndexing}" Command="{Binding PauseIndexCommand}" Margin="12,0" Padding="12,5" /><Button Grid.Column="2" Content="Annuler" IsVisible="{Binding IsIndexing}" Command="{Binding CancelIndexCommand}" Padding="12,5" /></Grid></Border>
+    </Grid>
+    <Grid x:Name="CompressionOverlay" IsVisible="{Binding IsCompressionDialogOpen}" Background="#99090C14">
+      <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="{DynamicResource LineBrush}" BorderThickness="1" CornerRadius="22" Padding="28" Width="760" MaxHeight="760" Margin="24" VerticalAlignment="Stretch" HorizontalAlignment="Center" KeyboardNavigation.TabNavigation="Cycle">
+        <views:CompressionDialogView DataContext="{Binding Optimizer}" />
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>
