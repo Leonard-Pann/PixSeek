@@ -23,11 +23,12 @@ public sealed class CpuExecutionProviderFactory : IExecutionProviderFactory
     };
 }
 
-public sealed class OnnxEmbeddingService(ModelManager models, ImageMagickService images, IExecutionProviderFactory provider) : IEmbeddingService, IDisposable
+public sealed class OnnxEmbeddingService(ModelManager models, ImageMagickService images, IExecutionProviderFactory provider) : ILocalEmbeddingService, IDisposable
 {
     private readonly SemaphoreSlim _gate = new(1, 1);
     private InferenceSession? _image, _text;
     private Tokenizer? _tokenizer;
+    private string? _loadedVersion;
     public bool IsReady => _image != null && _text != null && _tokenizer != null;
     public string Backend => provider.Name;
     public string InputDescription => IsReady ? "Image: " + Describe(_image!) + "; Texte: " + Describe(_text!) : "Non chargé";
@@ -38,8 +39,9 @@ public sealed class OnnxEmbeddingService(ModelManager models, ImageMagickService
         await _gate.WaitAsync(ct);
         try
         {
-            if (IsReady)
+            if (IsReady && _loadedVersion == models.Version)
                 return;
+            ReleaseSessions();
             await models.ValidateAsync(ct);
             await Task.Run(() =>
             {
@@ -58,6 +60,7 @@ public sealed class OnnxEmbeddingService(ModelManager models, ImageMagickService
                     _image = image;
                     _text = text;
                     _tokenizer = tokenizer;
+                    _loadedVersion = models.Version;
                 }
                 catch
                 {
@@ -74,12 +77,12 @@ public sealed class OnnxEmbeddingService(ModelManager models, ImageMagickService
         }
     }
 
-    public static float[] PreprocessRgb(ReadOnlySpan<byte> rgb)
+    public static float[] PreprocessRgb(ReadOnlySpan<byte> rgb, bool siglip = false)
     {
         const int pixels = 224 * 224;
         if (rgb.Length != pixels * 3)
             throw new ArgumentException("Une image RGB 224 × 224 est requise.");
-        float[] mean = [.48145466f, .4578275f, .40821073f], std = [.26862954f, .26130258f, .27577711f];
+        float[] mean = siglip ? [.5f, .5f, .5f] : [.48145466f, .4578275f, .40821073f], std = siglip ? [.5f, .5f, .5f] : [.26862954f, .26130258f, .27577711f];
         var tensor = new float[pixels * 3];
         for (var i = 0; i < pixels; i++)
             for (var c = 0; c < 3; c++)
@@ -90,8 +93,8 @@ public sealed class OnnxEmbeddingService(ModelManager models, ImageMagickService
     public async Task<float[]> GenerateImageEmbeddingAsync(string imagePath, CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken);
-        var rgb = await images.ReadModelRgbAsync(imagePath, cancellationToken);
-        var data = PreprocessRgb(rgb);
+        var rgb = await images.ReadModelRgbAsync(imagePath, cancellationToken, models.Manifest.Kind == "siglip2");
+        var data = PreprocessRgb(rgb, models.Manifest.Kind == "siglip2");
         await _gate.WaitAsync(cancellationToken);
         try
         {
@@ -114,17 +117,19 @@ public sealed class OnnxEmbeddingService(ModelManager models, ImageMagickService
             return await Task.Run(() =>
             {
                 // The exact upstream XLM-R Unigram tokenizer includes normalization and special tokens.
-                var encoded = _tokenizer!.Encode(text, true).First();
+                var siglip = models.Manifest.Kind == "siglip2";
+                var input = siglip ? Canonicalize(text) : text;
+                var encoded = _tokenizer!.Encode(input, true).First();
                 var ids = encoded.Ids.Select(x => (long)x).ToArray();
                 var fixedLength = _text!.InputMetadata.Values.First().Dimensions.Last();
-                var length = fixedLength > 0 ? fixedLength : Math.Min(77, ids.Length);
+                var length = fixedLength > 0 ? fixedLength : siglip ? 64 : Math.Min(77, ids.Length);
                 if (ids.Length > length)
                 {
                     ids = ids[..length];
-                    ids[^1] = 2;
+                    ids[^1] = siglip ? 1 : 2;
                 }
 
-                var tokens = Enumerable.Repeat(1L, length).ToArray();
+                var tokens = Enumerable.Repeat(siglip ? 0L : 1L, length).ToArray();
                 Array.Copy(ids, tokens, ids.Length);
                 var mask = Enumerable.Range(0, length).Select(i => i < ids.Length ? 1L : 0L).ToArray();
                 var inputs = new List<NamedOnnxValue>();
@@ -163,11 +168,40 @@ public sealed class OnnxEmbeddingService(ModelManager models, ImageMagickService
         return values;
     }
 
-    public void Dispose()
+    public static string Canonicalize(string text)
+    {
+        const string punctuation = "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~";
+        var clean = new string (text.Replace('_', ' ').ToLowerInvariant().Where(c => !punctuation.Contains(c)).ToArray());
+        return System.Text.RegularExpressions.Regex.Replace(clean, @"\s+", " ").Trim();
+    }
+
+    public async Task ResetAsync(CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            ReleaseSessions();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private void ReleaseSessions()
     {
         _image?.Dispose();
         _text?.Dispose();
         _tokenizer?.Dispose();
+        _image = null;
+        _text = null;
+        _tokenizer = null;
+        _loadedVersion = null;
+    }
+
+    public void Dispose()
+    {
+        ReleaseSessions();
         _gate.Dispose();
     }
 }

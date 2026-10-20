@@ -58,7 +58,9 @@ sealed class Program
                 await db.ConfigureVectorsAsync(model.Version, model.Manifest.Dimensions);
             }
 
-            var json = JsonSerializer.Serialize(new { DotNet = Environment.Version.ToString(), tools.FfmpegVersion, tools.MagickVersion, tools.Av1Encoder, tools.Jxl, tools.Avif, tools.NativeDirectory, SqliteVec = db.VectorStatus, AI = ai }, new JsonSerializerOptions { WriteIndented = true });
+            EmbeddedVideoSession.InitializeNative();
+            using var vlc = new LibVLCSharp.Shared.LibVLC("--quiet");
+            var json = JsonSerializer.Serialize(new { Version = typeof(Program).Assembly.GetName().Version?.ToString(3), DotNet = Environment.Version.ToString(), tools.FfmpegVersion, tools.MagickVersion, tools.Av1Encoder, tools.Jxl, tools.Avif, tools.NativeDirectory, SqliteVec = db.VectorStatus, AI = ai, LibVlc = vlc.Version }, new JsonSerializerOptions { WriteIndented = true });
             if (output != null)
                 await File.WriteAllTextAsync(output, json);
             Console.WriteLine(json);

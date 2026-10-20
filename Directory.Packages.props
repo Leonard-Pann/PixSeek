@@ -1,9 +1,11 @@
-﻿<Project>
+<Project>
     <!-- https://learn.microsoft.com/en-us/nuget/consume-packages/central-package-management -->
     <PropertyGroup>
         <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     </PropertyGroup>
     <ItemGroup>
+        <PackageVersion Include="LibVLCSharp" Version="3.10.2" />
+        <PackageVersion Include="VideoLAN.LibVLC.Windows" Version="3.0.23.1" />
         <PackageVersion Include="Microsoft.Data.Sqlite" Version="10.0.13" />
         <PackageVersion Include="Microsoft.ML.OnnxRuntime" Version="1.31.0" />
         <PackageVersion Include="Tokenizers.HuggingFace" Version="3.23.1" />

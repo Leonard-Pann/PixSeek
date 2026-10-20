@@ -244,8 +244,8 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.ML.OnnxRuntime": "[1.31.0, )",
-          "PixSeek.Core": "[1.0.0, )",
-          "PixSeek.Media": "[1.0.0, )",
+          "PixSeek.Core": "[0.2.1, )",
+          "PixSeek.Media": "[0.2.1, )",
           "Tokenizers.HuggingFace": "[3.23.1, )"
         }
       },
@@ -257,15 +257,15 @@
         "dependencies": {
           "Microsoft.Data.Sqlite": "[10.0.13, )",
           "Microsoft.Extensions.Logging": "[10.0.13, )",
-          "PixSeek.Core": "[1.0.0, )"
+          "PixSeek.Core": "[0.2.1, )"
         }
       },
       "pixseek.media": {
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.Logging": "[10.0.13, )",
-          "PixSeek.Core": "[1.0.0, )",
-          "PixSeek.Infrastructure": "[1.0.0, )"
+          "PixSeek.Core": "[0.2.1, )",
+          "PixSeek.Infrastructure": "[0.2.1, )"
         }
       },
       "PixSeek.UI": {
@@ -273,11 +273,14 @@
         "dependencies": {
           "Avalonia": "[12.1.1, )",
           "Avalonia.Fonts.Inter": "[12.1.1, )",
+          "Avalonia.Skia": "[12.1.1, )",
           "Avalonia.Themes.Fluent": "[12.1.1, )",
           "AvaloniaUI.DiagnosticsSupport": "[2.2.3, )",
           "CommunityToolkit.Mvvm": "[8.4.2, )",
+          "LibVLCSharp": "[3.10.2, )",
           "Microsoft.Extensions.DependencyInjection": "[10.0.13, )",
-          "PixSeek.AI": "[1.0.0, )"
+          "PixSeek.AI": "[0.2.1, )",
+          "VideoLAN.LibVLC.Windows": "[3.0.23.1, )"
         }
       },
       "Avalonia": {
@@ -340,6 +343,12 @@
         "resolved": "8.4.2",
         "contentHash": "WadCzGEc2U+3e20avRLng4qNtt4zoOGWrdUISqJWrHe3/FSnrYjuM5Sb4yQb09LhkBXrrI4Zt3dLKgRMbItsrg=="
       },
+      "LibVLCSharp": {
+        "type": "CentralTransitive",
+        "requested": "[3.10.2, )",
+        "resolved": "3.10.2",
+        "contentHash": "WNLHBIK5QcOH0kNGBGupKC9Ds3hksPthHyp6ueE8zG5Hy/6EBwAU0BbMqukBCdLatCOY+V9DYHDwSVSXSmPGSA=="
+      },
       "Microsoft.Data.Sqlite": {
         "type": "CentralTransitive",
         "requested": "[10.0.13, )",
@@ -388,6 +397,12 @@
         "dependencies": {
           "Google.Protobuf": "3.34.1"
         }
+      },
+      "VideoLAN.LibVLC.Windows": {
+        "type": "CentralTransitive",
+        "requested": "[3.0.23.1, )",
+        "resolved": "3.0.23.1",
+        "contentHash": "yTGNrzj+Q/t72VNKK0d64jZ+8BGu5Vcp2nxpZ2ll350LkRWKSwqShGpZWcVxXVP8TiMbeGML09+Jzz3hNsIcqA=="
       }
     }
   }

@@ -1,0 +1,52 @@
+{
+  "revision": "5f3fc29104ebcf51e9d893af57604badd51a3ea6",
+  "preprocessingVersion": "siglip2-224-squash-bicubic-rgb-canonicalize-v1",
+  "dimensions": 768,
+  "files": [
+    {
+      "sha256": "a33af509278a65855fd6b4fd8a17ed1b1e3482ff5d438c3fc43b07d4999e01b5",
+      "url": "https://huggingface.co/immich-app/ViT-B-16-SigLIP2__webli/resolve/5f3fc29104ebcf51e9d893af57604badd51a3ea6/config.json",
+      "size": 547,
+      "path": "config.json"
+    },
+    {
+      "sha256": "fc9991b415d7d0fac7ed540e875fd08a647c8a1abba99f12542531b004c4b68f",
+      "url": "https://huggingface.co/immich-app/ViT-B-16-SigLIP2__webli/resolve/5f3fc29104ebcf51e9d893af57604badd51a3ea6/textual/model.onnx",
+      "size": 1129435819,
+      "path": "textual/model.onnx"
+    },
+    {
+      "sha256": "db82f8bd9b25d14f9c788e6bde64de84d42f1c2538f1c245ba6cb3e872d14b18",
+      "url": "https://huggingface.co/immich-app/ViT-B-16-SigLIP2__webli/resolve/5f3fc29104ebcf51e9d893af57604badd51a3ea6/textual/special_tokens_map.json",
+      "size": 555,
+      "path": "textual/special_tokens_map.json"
+    },
+    {
+      "sha256": "220c63d496e0c14e63eb656c91e0215e926202e4c74b1f089e09f1920d779b04",
+      "url": "https://huggingface.co/immich-app/ViT-B-16-SigLIP2__webli/resolve/5f3fc29104ebcf51e9d893af57604badd51a3ea6/textual/tokenizer.json",
+      "size": 34362885,
+      "path": "textual/tokenizer.json"
+    },
+    {
+      "sha256": "958146aa289a0a39e4fcb20087a78facb157d29c7ef017374ac3ccab0549aae4",
+      "url": "https://huggingface.co/immich-app/ViT-B-16-SigLIP2__webli/resolve/5f3fc29104ebcf51e9d893af57604badd51a3ea6/textual/tokenizer_config.json",
+      "size": 46386,
+      "path": "textual/tokenizer_config.json"
+    },
+    {
+      "sha256": "fee10c729875dd203d94f396ac3d664e301d39c977ef6d92e7f467a2a716f0b0",
+      "url": "https://huggingface.co/immich-app/ViT-B-16-SigLIP2__webli/resolve/5f3fc29104ebcf51e9d893af57604badd51a3ea6/visual/model.onnx",
+      "size": 371674292,
+      "path": "visual/model.onnx"
+    },
+    {
+      "sha256": "d78a80d49dca4e62d17f802a685d67d821f7102844cb89f65a0bb1a5d0601f43",
+      "url": "https://huggingface.co/immich-app/ViT-B-16-SigLIP2__webli/resolve/5f3fc29104ebcf51e9d893af57604badd51a3ea6/visual/preprocess_cfg.json",
+      "size": 154,
+      "path": "visual/preprocess_cfg.json"
+    }
+  ],
+  "license": "Apache-2.0 (upstream timm/ViT-B-16-SigLIP2)",
+  "kind": "siglip2",
+  "id": "immich-app/ViT-B-16-SigLIP2__webli"
+}

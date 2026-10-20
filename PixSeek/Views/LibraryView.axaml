@@ -1,19 +1,18 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:PixSeek.ViewModels" xmlns:controls="using:PixSeek.Controls" x:Class="PixSeek.Views.LibraryView" x:DataType="vm:LibraryViewModel">
-  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="30,26,30,16">
-    <Grid ColumnDefinitions="*,Auto,Auto" Margin="0,0,0,18">
-      <TextBox x:Name="SearchInput" Text="{Binding Query}" PlaceholderText="Rechercher une photo, une scène, un souvenir..." FontSize="17" MinHeight="54" VerticalContentAlignment="Center" KeyDown="SearchKeyDown" />
-      <Button Grid.Column="1" Content="Rechercher" Classes="primary" Command="{Binding SearchCommand}" Margin="12,0,0,0" />
-      <Button Grid.Column="2" Content="＋  Ajouter un dossier" Command="{Binding AddFolderCommand}" Margin="12,0,0,0" />
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:PixSeek.ViewModels" xmlns:controls="using:PixSeek.Controls" xmlns:loc="using:PixSeek.Localization" x:Class="PixSeek.Views.LibraryView" x:DataType="vm:LibraryViewModel">
+  <Grid RowDefinitions="Auto,Auto,*" Margin="30,26,30,16">
+    <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,18">
+      <TextBox x:Name="SearchInput" Text="{Binding Query}" PlaceholderText="{loc:T SearchPlaceholder}" FontSize="17" MinHeight="54" VerticalContentAlignment="Center" KeyDown="SearchKeyDown" />
+      <Button Grid.Column="1" Content="{loc:T Search}" Classes="primary" Command="{Binding SearchCommand}" IsEnabled="{Binding !IsSearchBlocked}" Margin="12,0,0,0" />
+      <Button Grid.Column="2" Content="{loc:T AddFolder}" Command="{Binding AddFolderCommand}" Margin="12,0,0,0" />
+      <Button Grid.Column="3" x:Name="OpenSettingsButton" Content="⚙" Command="{Binding SettingsCommand}" Margin="10,0,0,0" ToolTip.Tip="{loc:T Settings}" />
     </Grid>
     <StackPanel Grid.Row="1" Spacing="12" Margin="0,0,0,14">
       <WrapPanel>
-        <ComboBox x:Name="MediaTypeFilter" ItemsSource="{Binding Types}" SelectedItem="{Binding SelectedType}" Margin="0,0,10,8" ToolTip.Tip="Type de média" />
-        <ComboBox ItemsSource="{Binding Folders}" SelectedItem="{Binding SelectedFolder}" PlaceholderText="Tous les dossiers" MaxWidth="220" MinWidth="170" Margin="0,0,10,8" ToolTip.Tip="Dossier source"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-        <ComboBox ItemsSource="{Binding Sorts}" SelectedItem="{Binding SelectedSort}" Margin="0,0,10,8" ToolTip.Tip="Trier les médias" />
-        <CalendarDatePicker x:Name="FromDateFilter" SelectedDate="{Binding FromDate}" PlaceholderText="À partir du…" Width="160" Margin="0,0,10,8" ToolTip.Tip="Date de début incluse" />
-        <CalendarDatePicker x:Name="ToDateFilter" SelectedDate="{Binding ToDate}" PlaceholderText="Jusqu'au…" Width="160" Margin="0,0,10,8" ToolTip.Tip="Date de fin incluse" />
-        <Button Content="Effacer les filtres" Command="{Binding ClearFiltersCommand}" Margin="0,0,10,8" />
-        <Button x:Name="CompressButton" Content="Compresser" Command="{Binding CompressCommand}" Margin="0,0,0,8" />
+        <ComboBox x:Name="MediaTypeFilter" ItemsSource="{Binding Types}" SelectedItem="{Binding SelectedTypeChoice}" Margin="0,0,10,8" ToolTip.Tip="{loc:T AllMedia}"><ComboBox.ItemTemplate><DataTemplate x:DataType="loc:Choice"><TextBlock Text="{Binding Label}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+        <ComboBox x:Name="FolderFilter" ItemsSource="{Binding FolderOptions}" SelectedItem="{Binding SelectedFolder}" PlaceholderText="{loc:T AllFolders}" MaxWidth="220" MinWidth="170" Margin="0,0,10,8" ToolTip.Tip="{loc:T AllFolders}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+        <ComboBox ItemsSource="{Binding Sorts}" SelectedItem="{Binding SelectedSortChoice}" Margin="0,0,10,8" ToolTip.Tip="{loc:T Date}"><ComboBox.ItemTemplate><DataTemplate x:DataType="loc:Choice"><TextBlock Text="{Binding Label}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+        <Button Content="{loc:T ClearFilters}" Command="{Binding ClearFiltersCommand}" Margin="0,0,10,8" />
+        <Button x:Name="CompressButton" Content="{loc:T Compress}" Command="{Binding CompressCommand}" Margin="0,0,0,8" />
       </WrapPanel>
       <TextBlock Text="{Binding Summary}" Classes="subtitle" FontSize="12" />
       <Border Height="3"><ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoading}" Height="3" /></Border>
@@ -24,18 +23,19 @@
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="vm:MediaRow">
           <ItemsControl ItemsSource="{Binding Cards}" Margin="0,0,0,8">
-            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" Columns="{Binding Columns}" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:MediaCardViewModel">
                 <Border CornerRadius="14" Background="{DynamicResource SurfaceBrush}" Margin="4" ClipToBounds="True">
                   <Grid RowDefinitions="180,Auto">
                     <Button Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Background="{DynamicResource SidebarBrush}" CornerRadius="12" Click="OpenMedia" ToolTip.Tip="{Binding Details}">
-                      <Button.ContextMenu><ContextMenu><MenuItem Header="Ouvrir" Click="OpenFromMenu" /><MenuItem Header="Ouvrir l'emplacement" Click="OpenLocation" /><MenuItem Header="Compresser" Click="OptimizeFile" /></ContextMenu></Button.ContextMenu>
+                      <Button.ContextMenu><ContextMenu><MenuItem Header="{loc:T Read}" Click="OpenFromMenu" /><MenuItem Header="{loc:T Compress}" Click="OptimizeFile" /><MenuItem Header="{loc:T OpenLocation}" Click="OpenLocation" /></ContextMenu></Button.ContextMenu>
                       <Grid><TextBlock Text="◇" FontSize="38" Foreground="{DynamicResource MutedBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" /><controls:AsyncThumbnail FilePath="{Binding ThumbnailPath}" Stretch="UniformToFill" /><Border Background="#B3181B28" CornerRadius="6" Padding="7,3" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="10" IsVisible="{Binding IsVideo}"><TextBlock Text="{Binding Badge}" Foreground="White" FontSize="12" /></Border></Grid>
                     </Button>
-                    <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8" ToolTip.Tip="Sélectionner ce média" />
-                    <StackPanel Grid.Row="1" Margin="10,7,10,10" Spacing="3"><TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" FontSize="12" /><TextBlock Text="{Binding Score}" Classes="subtitle" FontSize="11" /></StackPanel>
-                  </Grid>
+                    <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="8" ToolTip.Tip="{loc:T SelectMedia}" />
+                    <StackPanel Grid.Row="1" Margin="10,7,10,10" Spacing="3"><TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" FontSize="12" /></StackPanel>
+
+    </Grid>
                 </Border>
               </DataTemplate>
             </ItemsControl.ItemTemplate>
@@ -43,6 +43,5 @@
         </DataTemplate>
       </ListBox.ItemTemplate>
     </controls:MediaGallery>
-    <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="0,12,0,0"><Button Content="← Précédent" Command="{Binding PreviousCommand}" /><Button Content="Page suivante →" Command="{Binding NextCommand}" IsEnabled="{Binding HasMore}" /></StackPanel>
   </Grid>
 </UserControl>

@@ -1,20 +1,87 @@
 using System.Security.Cryptography;
 using System.Text.Json;
 using PixSeek.Core;
+using PixSeek.Infrastructure;
 
 namespace PixSeek.AI;
 public sealed record ModelAsset(string Path, long Size, string Sha256, string Url);
-public sealed record ModelManifest(string Id, string Revision, int Dimensions, string License, string PreprocessingVersion, IReadOnlyList<ModelAsset> Files);
-public sealed class ModelManager(IPlatformPaths paths)
+public sealed record ModelManifest(string Id, string Revision, int Dimensions, string License, string PreprocessingVersion, IReadOnlyList<ModelAsset> Files, string Kind = "xlmr");
+public sealed class ModelManager
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true
     };
-    public ModelManifest Manifest { get; } = JsonSerializer.Deserialize<ModelManifest>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "models", "manifest.json")), JsonOptions)!;
+    public const string DefaultId = "xlmr";
+    private readonly IPlatformPaths paths;
+    private string _activeId;
+    public string ActiveId => _activeId;
+    public IReadOnlyList<string> AvailableIds { get; } = ["xlmr", "siglip2"];
+    public ModelManifest Manifest => LoadManifest(_activeId);
     public string Version => Manifest.Revision + ":" + Manifest.PreprocessingVersion;
-    private string BundledPath => Path.Combine(AppContext.BaseDirectory, "models", "weights");
-    public string DirectoryPath => PresentIn(paths.Models) ? paths.Models : PresentIn(BundledPath) ? BundledPath : paths.Models;
+    public string Name => _activeId == "siglip2" ? "SigLIP2 · ViT-B/16" : "XLM-RoBERTa + ViT-B/32";
+
+    public ModelManager(IPlatformPaths paths, SettingsStore? store = null)
+    {
+        this.paths = paths;
+        _activeId = store?.Current.ActiveModelId == "siglip2" ? "siglip2" : DefaultId;
+    }
+
+    private static readonly Dictionary<string, ModelManifest> Manifests = new();
+    private static ModelManifest LoadManifest(string id)
+    {
+        lock (Manifests)
+        {
+            if (!Manifests.TryGetValue(id, out var manifest))
+            {
+                manifest = JsonSerializer.Deserialize<ModelManifest>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "models", id == "siglip2" ? "siglip2.json" : "manifest.json")), JsonOptions)!;
+                Manifests[id] = manifest;
+            }
+
+            return manifest;
+        }
+    }
+
+    public ModelManager For(string id)
+    {
+        if (!AvailableIds.Contains(id))
+            throw new ArgumentException("Unknown model.");
+        var manager = new ModelManager(paths);
+        manager._activeId = id;
+        return manager;
+    }
+
+    public void Select(string id)
+    {
+        var candidate = For(id);
+        if (!candidate.FilesPresent)
+            throw new FileNotFoundException("Download this model first.");
+        _activeId = id;
+    }
+
+    private string UserPath => _activeId == DefaultId ? paths.Models : Path.Combine(paths.Models, _activeId);
+    private string BundledPath => Path.Combine(AppContext.BaseDirectory, "models", _activeId == DefaultId ? "weights" : _activeId);
+    public string DirectoryPath => PresentIn(UserPath) ? UserPath : PresentIn(BundledPath) ? BundledPath : UserPath;
+
+    public void Delete()
+    {
+        foreach (var directory in new[]
+        {
+            UserPath,
+            BundledPath
+        }.Distinct())
+        {
+            var root = Path.GetFullPath(directory);
+            foreach (var asset in Manifest.Files)
+            {
+                var file = Path.GetFullPath(Path.Combine(root, asset.Path));
+                if (!file.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("Invalid model path.");
+                if (File.Exists(file))
+                    File.Delete(file);
+            }
+        }
+    }
 
     private bool PresentIn(string directory) => Manifest.Files.All(f => File.Exists(Path.Combine(directory, f.Path)) && new FileInfo(Path.Combine(directory, f.Path)).Length == f.Size);
     public bool FilesPresent => PresentIn(DirectoryPath);
@@ -38,7 +105,7 @@ public sealed class ModelManager(IPlatformPaths paths)
 
     public async Task DownloadAsync(IProgress<WorkProgress> progress, CancellationToken ct)
     {
-        if (!PresentIn(paths.Models) && PresentIn(BundledPath))
+        if (!PresentIn(UserPath) && PresentIn(BundledPath))
         {
             try
             {
@@ -59,7 +126,7 @@ public sealed class ModelManager(IPlatformPaths paths)
         long done = 0, total = Manifest.Files.Sum(f => f.Size);
         foreach (var f in Manifest.Files)
         {
-            var target = Path.Combine(paths.Models, f.Path);
+            var target = Path.Combine(UserPath, f.Path);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             if (File.Exists(target))
             {

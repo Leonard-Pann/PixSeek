@@ -54,3 +54,13 @@ Les paramètres sont des BLOB float32. Le score UI est `1 - distance`. Il s'agit
 Le test réel retrouve en tête le chat, le café et l'astronaute pour trois requêtes françaises. Le test de pipeline indexe aussi une vidéo à deux scènes et retrouve un timestamp dans la partie astronaute. Ce petit corpus valide le câblage et quelques cas ; ce n'est pas une évaluation exhaustive de qualité sur une photothèque personnelle.
 
 GPU : abstraction présente, seule l'exécution **CPU** est implémentée et testée. Aucun backend GPU fictif n'est proposé.
+
+## SigLIP2 alternatif (0.2.0)
+
+Couple concret : [Immich ViT-B-16-SigLIP2 WebLI ONNX](https://huggingface.co/immich-app/ViT-B-16-SigLIP2__webli), révision 5f3fc29104ebcf51e9d893af57604badd51a3ea6. Poids amont [timm/ViT-B-16-SigLIP2](https://huggingface.co/timm/ViT-B-16-SigLIP2), Apache-2.0, modèle multilingue SigLIP2. Le manifeste complet est tools/models/siglip2.json ; les sept actifs sont épinglés par taille, SHA-256 et URL de révision. Environ 1,54 Go.
+
+Image : RGB float32 NCHW [1,3,224,224], resize squash bicubique (pas de crop), moyenne et écart type 0,5 par canal. Texte : tokenizer Hugging Face fourni, nettoyage canonique OpenCLIP (minuscules, espaces et ponctuation ASCII), contexte 64, padding 0, EOS 1. Le JSON du tokenizer assure la segmentation exacte. Sortie commune 768 dimensions, normalisée L2 ; cosine dans sqlite-vec.
+
+L'inférence réelle et trois recherches françaises ont été exécutées. Le test bascule ensuite vers XLM-R (512D) et reconstruit l'index. Ce test est une validation fonctionnelle sur un petit corpus, pas un classement comparatif de qualité.
+
+Installation : Settings → AI model, Download à côté de SigLIP2. Pour les tests : pwsh -File scripts/install-model.ps1 -Model siglip2. Les fichiers alternatifs sont stockés sous models/siglip2 dans les données utilisateur. XLM-R/ViT-B32 reste le choix initial et est préinstallé dans la publication Windows ; SigLIP2 reste optionnel.

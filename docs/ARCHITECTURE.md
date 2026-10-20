@@ -23,13 +23,13 @@ flowchart LR
 - `IPlatformPaths` : stockage applicatif et répertoire natif par RID.
 - `IExecutionProviderFactory` : options de sessions ONNX ; CPU implémenté et toujours disponible si les bibliothèques natives sont compatibles.
 
-`LibraryDatabase` centralise ici schéma et accès aux données. SQLite est ouvert par opération, poolé, avec clés étrangères, WAL et délai de verrouillage. `SchemaMigration` contient la migration 1, idempotente. Les colonnes structurées servent aux filtres/index et `Payload` à la sérialisation des propriétés complémentaires. `MediaEmbedding` conserve le vecteur BLOB et son lien au média/frame. `MediaVector` contient les mêmes vecteurs dans sqlite-vec ; une transaction garantit la cohérence lors du remplacement.
+`LibraryDatabase` centralise ici schéma et accès aux données. SQLite est ouvert par opération, poolé, avec clés étrangères, WAL et délai de verrouillage. `SchemaMigration` contient les migrations versionnées 1 et 2. La migration 2 répare les colonnes de filtrage des anciennes bases depuis les fiches JSON. Les colonnes structurées servent aux filtres/index et `Payload` à la sérialisation des propriétés complémentaires. `MediaEmbedding` conserve le vecteur BLOB et son lien au média/frame. `MediaVector` contient les mêmes vecteurs dans sqlite-vec ; une transaction garantit la cohérence lors du remplacement.
 
 La version de l'index comprend la révision du modèle et celle du prétraitement. Le changement de modèle/dimension détruit l'ancien index et invalide les versions des médias. Le modèle sélectionné produit 512 dimensions, l'implémentation SQL reçoit cette dimension du manifeste, elle ne la suppose pas pour toutes les familles.
 
 ## Indexation
 
-La découverte construit d'abord un plan de travail avec une phase de préparation indéterminée, puis un `Channel<PlannedMedia>` borné à 32 transmet les médias au consommateur. Le pourcentage est pondéré par les étapes nécessaires (métadonnées, miniature, inférence, frames vidéo et persistance), avec un dénominateur fixe sur tous les dossiers. Les fichiers déjà indexés ne gonflent pas ce dénominateur. Un consommateur limite les processus de décodage et les inférences. Le scan passe hors thread UI. Les sessions ONNX sont partagées et protégées par un sémaphore. Les miniatures sont écrites dans le cache avec une clé SHA-256 de chemin, taille, modification et version. Le résultat est persisté média par média ; `Rescanner` reprend les éléments non indexés après fermeture.
+La découverte construit d'abord un plan de travail avec une phase de préparation indéterminée, puis jusqu'à trois workers préparent les métadonnées et miniatures. Un Channel de références transmet les médias prêts au worker ONNX, indépendamment de la cadence des miniatures. Le pourcentage est pondéré par les étapes nécessaires (métadonnées, miniature, inférence, frames vidéo et persistance), avec un dénominateur fixe sur tous les dossiers. Les fichiers déjà indexés ne gonflent pas ce dénominateur. Le nombre de processus de préparation est borné ; les inférences sont sérialisées, avec parallélisme CPU interne ONNX. Le scan passe hors thread UI. Les sessions ONNX sont partagées et protégées par un sémaphore. Les miniatures sont écrites dans le cache avec une clé SHA-256 de chemin, taille, modification et version. Le résultat est persisté média par média ; `Rescanner` reprend les éléments non indexés après fermeture.
 
 Un fichier inchangé, dont le cache et la version d'embedding correspondent, est ignoré. Un fichier modifié invalide ses anciens vecteurs. Un média supprimé est marqué absent après scan complet, ses références sont conservées. Un dossier déconnecté est marqué indisponible sans suppression. Les déplacements sont actuellement traités comme disparition + nouveau chemin, pas comme identité conservée.
 
@@ -37,9 +37,9 @@ Les vidéos produisent des frames réparties sur la durée, à environ 10 second
 
 ## Galerie
 
-240 fiches maximum par page SQL, tri borné à une liste autorisée. `MediaGallery` dérive de `ListBox` avec des conteneurs de ligne non sélectionnables ; `VirtualizingStackPanel` virtualise les lignes. Chaque ligne contient un `ItemsControl` de 2 à 7 cartes selon la largeur ; cet ensemble est de taille bornée. Seuls les médias ont une sélection individuelle. `AsyncThumbnail` décode au maximum trois JPEG de cache en parallèle et libère chaque bitmap au détachement. Les originaux ne sont pas chargés pour composer la grille. Une visionneuse séparée prépare un aperçu de 3 200 pixels maximum.
+Lots SQL de 240 fiches ajoutés au défilement ; tri et filtres appliqués à toute la bibliothèque avant LIMIT/OFFSET. `MediaGallery` dérive de `ListBox` avec des conteneurs de ligne non sélectionnables ; `VirtualizingStackPanel` virtualise les lignes. Chaque ligne contient un `ItemsControl` de 2 à 7 cartes selon la largeur ; le nombre de colonnes explicite conserve la largeur des cases sur une ligne incomplète. Seuls les médias ont une sélection individuelle. `AsyncThumbnail` décode au maximum trois JPEG de cache en parallèle et libère chaque bitmap au détachement. Les originaux ne sont pas chargés pour composer la grille. La visionneuse est superposée dans la même fenêtre. ImagePreviewCache décode directement via SKCodec, applique EXIF et conserve trois images avec leases ; le préchargement utilise le même cache. Les formats non reconnus utilisent un JPEG de secours persistant.
 
-La photothèque est la page initiale. Recherche et filtres partagent la même grille ; les changements de type/dossier/date s'appliquent après un délai de 150 ms. Les dates filtrent le jour local, fin incluse. Pendant un scan, un rafraîchissement discret réutilise les ViewModels par identifiant et modifie les lignes/cartes individuellement, sans `Clear` ni rechargement des miniatures inchangées. La page, la recherche, les filtres et les sélections sont conservés.
+La photothèque est la page initiale. Recherche et filtres partagent la même grille ; les changements de type/dossier s'appliquent après un délai de 150 ms. Le premier élément du filtre dossier représente explicitement tous les dossiers. Pendant un scan, un rafraîchissement discret réutilise les ViewModels par identifiant et modifie les lignes/cartes individuellement, sans `Clear` ni rechargement des miniatures inchangées. La page, la recherche, les filtres et les sélections sont conservés.
 
 ## Compression et jobs
 
@@ -54,3 +54,17 @@ Le système de jobs est volontairement petit : scan/indexation et conversion ont
 ## Mobile futur
 
 Réutiliser Core et les contrats, remplacer les implémentations de chemins, base, sélection, lecture et traitement natif. Ne pas copier les processus FFmpeg/ImageMagick desktop sur Android/iOS. Les ViewModels actuels sont desktop et leur navigation devra être adaptée.
+
+## Recherche, modèles et surveillance (0.2.0)
+
+HybridRanking conserve l'ordre cosine si la vraisemblance du nom est faible. Un nom normalisé exact, une expression complète ou une distance d'édition normalisée ≥ 0,84 reçoit une priorité forte. Les candidats par nom sont obtenus indépendamment du top K sémantique, puis fusionnés par identifiant.
+
+ModelManager sélectionne un manifeste XLM-R ou SigLIP2. Le tokenizer, padding, longueur, normalisation et resize sont propres au modèle. Le changement attend l'arrêt du scan, libère les sessions ONNX, valide le nouveau modèle, reconstruit vec0 avec ses dimensions, persiste le choix puis réindexe automatiquement. Le choix visuel est immédiat ; le chargement est sérialisé hors du thread UI et la dernière demande est prioritaire. La recherche est suspendue pendant le remplacement des sessions et de l'index, puis redevient disponible pendant la réindexation en arrière-plan.
+
+LibraryMonitor combine un signal FileSystemWatcher temporisé de 750 ms et une réconciliation périodique d'une minute. Le scan initial réconcilie également les dossiers. Un travail unique traite les signaux groupés ; les disques absents ne sont pas purgés.
+
+EmbeddedVideoSession utilise les callbacks RV32 de LibVLC et une WriteableBitmap Avalonia. Une seule copie de frame est en attente sur le dispatcher ; le buffer natif est verrouillé durant la copie. Aucun NativeControlHost ni fenêtre vidéo séparée n'est créé. L'arrêt attend le player avant de libérer le buffer.
+
+TranslationService charge un JSON par langue ; l'extension XAML T lie les textes au changement de langue. Les identifiants des choix restent stables. Les paramètres sont écrits atomiquement après 250 ms, sans perdre les préférences de compression ; la fermeture attend la sauvegarde en attente.
+
+Depuis 0.2.1, les filtres sont poussés dans vec0 par rowid IN (sous-requête MediaEmbedding/MediaFile), avant MATCH/k. ICompressionCodecPolicy centralise les codecs de défaut. FFprobe détermine la taille d'affichage vidéo avec rotation et SAR ; EndReached gère une position finale stable et la recréation du média lors du replay.

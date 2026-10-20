@@ -30,3 +30,9 @@ Avant diffusion publique, compléter les sources correspondantes et obligations 
 ## Unix
 
 sqlite-vec et ImageMagick source Linux sont épinglés avec SHA-256. Les autres outils sont préparés avec apt/Homebrew sur les runners natifs et leurs versions enregistrées. Leur verrouillage exhaustif n'est pas réalisé ; les artefacts Unix sont expérimentaux et non validés dans cette session Windows. Voir CROSS_PLATFORM.
+
+## Ajouts 0.2.0
+
+LibVLCSharp 3.10.2 et le SDK natif VideoLAN.LibVLC.Windows 3.0.23.1 sont verrouillés via NuGet et packages.lock.json (content hashes). Les sources et licences sont référencées dans THIRD_PARTY_NOTICES. Les builds Windows AnyCPU du prototype embarquent seulement les natifs x64 ; une publication win-arm64 sélectionne ceux d'ARM64 mais n'est pas validée ici.
+
+SigLIP2 est épinglé indépendamment dans tools/models/siglip2.json. Le script install-model accepte -Model xlmr ou -Model siglip2. La publication Windows inclut XLM-R par défaut et ne copie que les actifs de son manifeste, pour éviter d'embarquer involontairement tous les modèles de test.

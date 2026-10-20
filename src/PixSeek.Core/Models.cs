@@ -76,6 +76,11 @@ public interface IEmbeddingService
     Task<float[]> GenerateTextEmbeddingAsync(string text, CancellationToken cancellationToken);
 }
 
+public interface ILocalEmbeddingService : IEmbeddingService
+{
+    Task InitializeAsync(CancellationToken cancellationToken = default);
+}
+
 public interface IVectorSearchService
 {
     Task<IReadOnlyList<SearchResult>> SearchAsync(ReadOnlyMemory<float> queryEmbedding, int maxResults, CancellationToken cancellationToken);

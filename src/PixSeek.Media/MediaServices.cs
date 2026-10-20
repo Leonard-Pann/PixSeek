@@ -7,6 +7,30 @@ using PixSeek.Core;
 namespace PixSeek.Media;
 public sealed class FfprobeService(NativeTools tools, ProcessRunner runner)
 {
+    public static (int Width, int Height) DisplaySize(MediaMetadata metadata)
+    {
+        var width = (double)Math.Max(1, metadata.Width);
+        var height = Math.Max(1, metadata.Height);
+        var rotation = 0d;
+        if (metadata.RawJson != null)
+        {
+            using var document = JsonDocument.Parse(metadata.RawJson);
+            var stream = document.RootElement.GetProperty("streams").EnumerateArray()
+                .First(s => Text(s, "codec_type") == "video" && (!s.TryGetProperty("disposition", out var d) || Number(d, "attached_pic") == 0));
+            var ratio = Text(stream, "sample_aspect_ratio").Split(':');
+            if (ratio.Length == 2 && double.TryParse(ratio[0], CultureInfo.InvariantCulture, out var numerator) &&
+                double.TryParse(ratio[1], CultureInfo.InvariantCulture, out var denominator) && numerator > 0 && denominator > 0)
+                width *= numerator / denominator;
+            if (stream.TryGetProperty("tags", out var tags))
+                double.TryParse(Text(tags, "rotate"), CultureInfo.InvariantCulture, out rotation);
+            if (stream.TryGetProperty("side_data_list", out var sideData))
+                foreach (var side in sideData.EnumerateArray())
+                    if (side.TryGetProperty("rotation", out var angle) && angle.TryGetDouble(out var value)) rotation = value;
+        }
+        var w = (int)Math.Clamp(Math.Round(width), 1, 32768);
+        return Math.Abs((int)Math.Round(rotation / 90)) % 2 == 1 ? (height, w) : (w, height);
+    }
+
     public async Task<MediaMetadata> ProbeAsync(string file, CancellationToken ct = default)
     {
         var json = await runner.CheckedAsync(tools.PathFor("ffprobe"), ["-v", "error", "-show_format", "-show_streams", "-of", "json", file], ct, timeout: TimeSpan.FromMinutes(2));
@@ -38,12 +62,12 @@ public sealed class ImageMagickService(NativeTools tools, ProcessRunner runner)
     }
 
     public Task ThumbnailAsync(string file, string destination, int size, CancellationToken ct = default) => RunAsync([file + "[0]", "-auto-orient", "-thumbnail", $"{size}x{size}>", "-strip", "-quality", "85", destination], ct);
-    public async Task<byte[]> ReadModelRgbAsync(string file, CancellationToken ct)
+    public async Task<byte[]> ReadModelRgbAsync(string file, CancellationToken ct, bool squash = false)
     {
         var tmp = Path.Combine(Path.GetTempPath(), $"pixseek-{Guid.NewGuid():N}.rgb");
         try
         {
-            await RunAsync([file + "[0]", "-auto-orient", "-colorspace", "sRGB", "-background", "white", "-alpha", "remove", "-filter", "Catrom", "-resize", "224x224^", "-gravity", "center", "-extent", "224x224", "-depth", "8", "RGB:" + tmp], ct);
+            await RunAsync([file + "[0]", "-auto-orient", "-colorspace", "sRGB", "-background", "white", "-alpha", "remove", "-filter", "Catrom", "-resize", squash ? "224x224!" : "224x224^", "-gravity", "center", "-extent", "224x224", "-depth", "8", "RGB:" + tmp], ct);
             return await File.ReadAllBytesAsync(tmp, ct);
         }
         finally

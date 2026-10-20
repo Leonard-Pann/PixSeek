@@ -45,7 +45,8 @@ public sealed class PlatformPaths : IPlatformPaths
 public sealed record UserSettings
 {
     public string Theme { get; init; } = "Système";
-    public string Language { get; init; } = "fr";
+    public string Language { get; init; } = "en";
+    public string ActiveModelId { get; init; } = "xlmr";
     public int FrameIntervalSeconds { get; init; } = 10;
     public int MaxVideoFrames { get; init; } = 120;
     public long MaxCacheBytes { get; init; } = 2L * 1024 * 1024 * 1024;
@@ -54,6 +55,7 @@ public sealed record UserSettings
 
 public sealed class SettingsStore(IPlatformPaths paths)
 {
+    private readonly SemaphoreSlim _saveGate = new(1, 1);
     private string FilePath => Path.Combine(paths.Data, "settings.json");
     public UserSettings Current { get; private set; } = Load(paths);
 
@@ -71,10 +73,35 @@ public sealed class SettingsStore(IPlatformPaths paths)
 
     public async Task SaveAsync(UserSettings settings)
     {
-        var temp = FilePath + ".tmp";
-        await File.WriteAllTextAsync(temp, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
-        File.Move(temp, FilePath, true);
-        Current = settings;
+        await _saveGate.WaitAsync();
+        try
+        {
+            var temp = FilePath + ".tmp";
+            await File.WriteAllTextAsync(temp, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(temp, FilePath, true);
+            Current = settings;
+        }
+        finally
+        {
+            _saveGate.Release();
+        }
+    }
+
+    public async Task UpdateAsync(Func<UserSettings, UserSettings> update)
+    {
+        await _saveGate.WaitAsync();
+        try
+        {
+            var settings = update(Current);
+            var temp = FilePath + ".tmp";
+            await File.WriteAllTextAsync(temp, JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true }));
+            File.Move(temp, FilePath, true);
+            Current = settings;
+        }
+        finally
+        {
+            _saveGate.Release();
+        }
     }
 }
 

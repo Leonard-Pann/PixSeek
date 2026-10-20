@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:PixSeek.ViewModels" xmlns:controls="using:PixSeek.Controls" xmlns:loc="using:PixSeek.Localization" x:Class="PixSeek.Views.MediaViewerView" x:DataType="vm:MediaViewerViewModel" Background="#101115" Focusable="True">
+  <Grid RowDefinitions="*,Auto" ClipToBounds="True">
+    <controls:ZoomImage x:Name="PhotoSurface" Bitmap="{Binding Image}" IsVisible="{Binding !IsVideo}" />
+    <Image x:Name="VideoSurface" Source="{Binding Image}" IsVisible="{Binding IsVideo}" Stretch="Uniform" />
+    <Border x:Name="LoadingSurface" Background="Black" IsVisible="{Binding IsLoading}" />
+    <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoading}" Height="3" VerticalAlignment="Top" />
+    <Button Content="‹" Command="{Binding PreviousCommand}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="16" FontSize="34" Background="#80101014" Foreground="White" Padding="12,0" />
+    <Button Content="›" Command="{Binding NextCommand}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16" FontSize="34" Background="#80101014" Foreground="White" Padding="12,0" />
+    <Button Content="✕" Command="{Binding CloseCommand}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="18" Background="#80101014" Foreground="White" Padding="12,8" ToolTip.Tip="{loc:T Close}" />
+    <TextBlock Text="{Binding ErrorMessage}" IsVisible="{Binding HasError}" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="700" />
+    <Border Grid.Row="1" IsVisible="{Binding IsVideo}" Background="#E0191A20" Padding="22,12"><Grid ColumnDefinitions="Auto,*,Auto,Auto,140" ColumnSpacing="16">
+      <Button Content="{Binding PlaybackIcon}" Command="{Binding TogglePlaybackCommand}" Padding="12,6" Foreground="White" Background="Transparent" />
+      <Slider x:Name="VideoSeek" Grid.Column="1" Value="{Binding Position}" Maximum="{Binding Duration}" Minimum="0" VerticalAlignment="Center" />
+      <TextBlock Grid.Column="2" Text="{Binding TimeLabel}" Foreground="White" VerticalAlignment="Center" FontSize="12" />
+      <Button Grid.Column="3" Command="{Binding ToggleMuteCommand}" Foreground="White" Background="Transparent" Padding="8,6" ToolTip.Tip="{loc:T Volume}">
+        <Grid Width="24" Height="24">
+          <PathIcon Width="22" Height="22" IsVisible="{Binding !IsSilent}" Data="M3,9 L7,9 L12,4 L12,20 L7,15 L3,15 Z M15,7 L17,5 C21,9 21,15 17,19 L15,17 C18,14 18,10 15,7 Z M14,10 L15,9 C17,11 17,13 15,15 L14,14 C15,13 15,11 14,10 Z" />
+          <PathIcon Width="22" Height="22" IsVisible="{Binding IsSilent}" Data="M3,9 L7,9 L12,4 L12,20 L7,15 L3,15 Z M15,8 L18,11 L21,8 L22,9 L19,12 L22,15 L21,16 L18,13 L15,16 L14,15 L17,12 L14,9 Z" />
+        </Grid>
+      </Button>
+      <Slider Grid.Column="4" Value="{Binding Volume}" Minimum="0" Maximum="100" VerticalAlignment="Center" />
+    </Grid></Border>
+  </Grid>
+</UserControl>

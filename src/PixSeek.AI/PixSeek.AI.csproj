@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
   <ItemGroup><ProjectReference Include="../PixSeek.Core/PixSeek.Core.csproj" /><ProjectReference Include="../PixSeek.Media/PixSeek.Media.csproj" /><PackageReference Include="Microsoft.ML.OnnxRuntime" /><PackageReference Include="Tokenizers.HuggingFace" /></ItemGroup>
-  <ItemGroup><None Include="../../tools/models/manifest.json" Link="models/manifest.json" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
+  <ItemGroup><None Include="../../tools/models/*.json" Link="models/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>

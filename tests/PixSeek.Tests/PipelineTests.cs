@@ -9,6 +9,59 @@ namespace PixSeek.Tests;
 public sealed class PipelineTests(TestEnvironment e) : IClassFixture<TestEnvironment>
 {
     [Fact]
+    public async Task ThumbnailWorkers_ContinueWhileRealOnnxInitializationIsBlocked()
+    {
+        var root = Path.Combine(e.Work, "parallel-library");
+        Directory.CreateDirectory(root);
+        for (var i = 0; i < 24; i++)
+            File.Copy(Path.Combine(e.Root, "tests", "fixtures", "coffee.png"), Path.Combine(root, $"photo-{i}.png"));
+        var paths = new ModelPaths(e.Paths, Path.Combine(e.Root, "artifacts", "models"));
+        var manager = new ModelManager(paths);
+        using var real = new OnnxEmbeddingService(manager, e.Images, new CpuExecutionProviderFactory());
+        var gate = new GatedOnnx(real);
+        var indexer = new LibraryIndexer(e.Db, e.Images, e.Probe, new(paths, e.Images, e.Video), e.Video,
+            gate, manager, new SettingsStore(paths), NullLogger<LibraryIndexer>.Instance);
+        var folder = await e.Db.AddFolderAsync(root, true);
+        using var control = new JobControl();
+        var scan = indexer.ScanAsync([folder], control, new Progress<WorkProgress>());
+        try
+        {
+            await gate.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            var deadline = Environment.TickCount64 + 20000;
+            IReadOnlyList<MediaFile> media;
+            do
+            {
+                await Task.Delay(100);
+                media = await e.Db.MediaAsync(folder: folder.Id);
+            } while ((media.Count != 24 || media.Any(m => !File.Exists(m.ThumbnailPath))) && Environment.TickCount64 < deadline);
+            Assert.Equal(24, media.Count);
+            Assert.All(media, m => Assert.True(File.Exists(m.ThumbnailPath)));
+            Assert.False(scan.IsCompleted);
+            Assert.All(media, m => Assert.Null(m.IndexedVersion));
+        }
+        finally { gate.Release.TrySetResult(); }
+        await scan;
+        Assert.All(await e.Db.MediaAsync(folder: folder.Id), m => Assert.NotNull(m.IndexedVersion));
+        await e.Db.RemoveFolderAsync(folder.Id);
+    }
+
+    private sealed class GatedOnnx(OnnxEmbeddingService real) : ILocalEmbeddingService
+    {
+        public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public async Task InitializeAsync(CancellationToken cancellationToken)
+        {
+            Started.TrySetResult();
+            await Release.Task.WaitAsync(cancellationToken);
+            await real.InitializeAsync(cancellationToken);
+        }
+        public Task<float[]> GenerateImageEmbeddingAsync(string imagePath, CancellationToken cancellationToken)
+            => real.GenerateImageEmbeddingAsync(imagePath, cancellationToken);
+        public Task<float[]> GenerateTextEmbeddingAsync(string text, CancellationToken cancellationToken)
+            => real.GenerateTextEmbeddingAsync(text, cancellationToken);
+    }
+
+    [Fact]
     public async Task FullIndexPipeline_ExtractsVideoFrames_PersistsAndReusesEmbeddings_RecoversUnavailableFolder()
     {
         var root = Path.Combine(e.Work, "library");

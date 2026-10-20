@@ -1,5 +1,5 @@
-using CommunityToolkit.Mvvm.ComponentModel;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PixSeek.AI;
 using PixSeek.Core;
@@ -7,6 +7,7 @@ using PixSeek.Infrastructure;
 using PixSeek.Media;
 using Microsoft.Extensions.Logging;
 using PixSeek.Services;
+using PixSeek.Localization;
 
 namespace PixSeek.ViewModels;
 public partial class MainViewModel : ViewModelBase
@@ -16,16 +17,20 @@ public partial class MainViewModel : ViewModelBase
     private readonly NativeTools _tools;
     private readonly ModelManager _models;
     private readonly ILogger<MainViewModel> _logger;
+    private readonly LibraryMonitor _monitor;
     private JobControl? _indexControl;
     private readonly DispatcherTimer _refreshTimer;
+    private bool _refreshingGallery, _rescanRequested, _stopped;
+    private int _modelScanRequest;
     public LibraryViewModel Library { get; }
     public OptimizerViewModel Optimizer { get; }
     public SettingsViewModel Settings { get; }
+    public MediaViewerViewModel Viewer { get; }
 
     [ObservableProperty]
     private int _pageIndex = 1;
     [ObservableProperty]
-    private string _status = "Initialisation…";
+    private string _status = "";
     [ObservableProperty]
     private string _errorMessage = "";
     [ObservableProperty]
@@ -38,101 +43,110 @@ public partial class MainViewModel : ViewModelBase
     private bool _isIndexProgressIndeterminate;
     [ObservableProperty]
     private bool _isCompressionDialogOpen;
-    private bool _refreshingGallery;
-    [ObservableProperty]
-    private long _photos;
-    [ObservableProperty]
-    private long _videos;
-    [ObservableProperty]
-    private long _folderCount;
-    [ObservableProperty]
-    private long _indexed;
-    [ObservableProperty]
-    private long _pending;
-    [ObservableProperty]
-    private string _aiStatus = "IA à configurer";
-    [ObservableProperty]
-    private bool _sidebarExpanded = true;
-    public bool IsHome => PageIndex == 0;
-    public bool IsGallery => PageIndex is 1 or 2;
-    public bool IsSearch => PageIndex == 2;
+    public bool IsGallery => PageIndex != 4;
     public bool IsSettings => PageIndex == 4;
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
-    public string PageTitle => PageIndex switch
-    {
-        1 or 2 => "",
-        4 => "Paramètres",
-        _ => "Bienvenue chez vous"
-    };
-    public double SidebarWidth => SidebarExpanded ? 220 : 80;
 
-    public MainViewModel(LibraryDatabase db, LibraryIndexer indexer, NativeTools tools, ModelManager models, LibraryViewModel library, OptimizerViewModel optimizer, SettingsViewModel settings, ILogger<MainViewModel> logger)
+    public MainViewModel(LibraryDatabase db, LibraryIndexer indexer, NativeTools tools, ModelManager models, LibraryViewModel library, OptimizerViewModel optimizer, SettingsViewModel settings, MediaViewerViewModel viewer, LibraryMonitor monitor, ILogger<MainViewModel> logger)
     {
         _db = db;
         _indexer = indexer;
         _tools = tools;
         _models = models;
         _logger = logger;
+        _monitor = monitor;
         Library = library;
         Optimizer = optimizer;
         Settings = settings;
+        Viewer = viewer;
         Library.Error = ShowError;
         Optimizer.Error = ShowError;
         Settings.Error = ShowError;
-        Library.OpenMedia = OpenMedia;
-        Settings.AfterModelReady = () => RescanAsync();
+        Settings.PropertyChanged += (_, args) =>
+        {
+            if (args.PropertyName != nameof(SettingsViewModel.IsModelBusy))
+                return;
+            Library.IsSearchBlocked = Settings.IsModelBusy;
+            if (!Settings.IsModelBusy)
+                Library.RefreshCommand.Execute(null);
+        };
+        Library.OpenMedia = card =>
+        {
+            _ = Viewer.OpenAsync(Library.Cards, card);
+        };
+        Library.OpenSettings = () => PageIndex = 4;
         Library.OptimizeFiles = ShowCompression;
         Library.AddFolder = AddFolderAsync;
         Optimizer.RequestClose = () => IsCompressionDialogOpen = false;
+        Settings.BeforeModelChange = CancelAndWaitAsync;
+        Settings.AfterModelReady = () =>
+        {
+            Library.InvalidateQuery();
+            _ = StartModelScanAsync();
+            return Task.CompletedTask;
+        };
+        Settings.AfterSamplingChanged = ReindexAsync;
+        Settings.AfterCacheClear = async () =>
+        {
+            await CancelAndWaitAsync();
+            await RescanAsync();
+        };
+        Settings.AfterLanguageChanged = () => Library.LoadAsync(resetPage: false);
+        _monitor.ChangeRequested += () => Dispatcher.UIThread.Post(() =>
+        {
+            if (!_stopped)
+                _ = CheckForLibraryChangesAsync();
+        });
         _refreshTimer = new()
         {
             Interval = TimeSpan.FromSeconds(1)
         };
         _refreshTimer.Tick += async (_, _) =>
         {
-            if (IsIndexing && !_refreshingGallery)
+            if (!IsIndexing || _refreshingGallery)
+                return;
+            _refreshingGallery = true;
+            try
             {
-                _refreshingGallery = true;
-                try
-                {
-                    await UpdateStatsAsync();
-                    if (IsGallery)
-                        await Library.RefreshInBackgroundAsync();
-                }
-                catch (Exception e)
-                {
-                    ShowError(e.Message);
-                }
-                finally
-                {
-                    _refreshingGallery = false;
-                }
+                if (IsGallery)
+                    await Library.RefreshInBackgroundAsync();
+            }
+            catch (Exception e)
+            {
+                ShowError(e.Message);
+            }
+            finally
+            {
+                _refreshingGallery = false;
             }
         };
     }
 
+    private async Task StartModelScanAsync()
+    {
+        var request = ++_modelScanRequest;
+        try
+        {
+            var folders = await Task.Run(() => _db.FoldersAsync());
+            if (request == _modelScanRequest && !_stopped)
+                await RunScanAsync(folders, false);
+        }
+        catch (Exception e) { ShowError(e.Message); }
+    }
+
     partial void OnPageIndexChanged(int value)
     {
-        foreach (var p in new[]
-        {
-            nameof(IsHome),
-            nameof(IsGallery),
-            nameof(IsSearch),
-            nameof(IsSettings),
-            nameof(PageTitle)
-        }
-
-        )
-            OnPropertyChanged(p);
+        OnPropertyChanged(nameof(IsGallery));
+        OnPropertyChanged(nameof(IsSettings));
     }
 
     partial void OnErrorMessageChanged(string value) => OnPropertyChanged(nameof(HasError));
-    partial void OnSidebarExpandedChanged(bool value) => OnPropertyChanged(nameof(SidebarWidth));
     public async Task InitializeAsync()
     {
+        _stopped = false;
         try
         {
-            await _db.InitializeAsync();
+            await Task.Run(() => _db.InitializeAsync());
             try
             {
                 await _tools.DetectAsync();
@@ -143,26 +157,18 @@ public partial class MainViewModel : ViewModelBase
             }
 
             if (_models.FilesPresent)
-                try
-                {
-                    await _db.ConfigureVectorsAsync(_models.Version, _models.Manifest.Dimensions);
-                }
-                catch (Exception e)
-                {
-                    ShowError(e.Message);
-                }
-
+                await Task.Run(() => _db.ConfigureVectorsAsync(_models.Version, _models.Manifest.Dimensions, modelName: _models.Name));
             Optimizer.LoadSettings();
-            await Library.LoadAsync();
             await Settings.LoadAsync();
-            await UpdateStatsAsync();
-            Status = "Prêt · vos fichiers restent sur cet ordinateur";
+            await Library.LoadAsync();
+            Status = TranslationService.Text("Ready");
             _refreshTimer.Start();
+            _monitor.Update(await _db.FoldersAsync());
+            await CheckForLibraryChangesAsync();
         }
         catch (Exception e)
         {
             ShowError(e.Message);
-            Status = "Initialisation incomplète · consultez les diagnostics";
         }
     }
 
@@ -177,42 +183,32 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void Navigate(string page)
     {
-        if (!int.TryParse(page, out var p))
-            return;
-        if (p == 3)
+        if (page == "3")
             ShowCompression([]);
         else
-            PageIndex = p;
+            PageIndex = page == "4" ? 4 : 1;
     }
 
     public void ShowCompression(IReadOnlyList<string> files)
     {
-        if (Optimizer.IsBusy)
-        {
-            IsCompressionDialogOpen = true;
-            return;
-        }
-
-        Optimizer.Prepare(files.Count > 0 ? files : null);
+        if (!Optimizer.IsBusy)
+            Optimizer.Prepare(files.Count > 0 ? files : null);
         IsCompressionDialogOpen = true;
     }
 
     [RelayCommand]
-    private void ToggleSidebar() => SidebarExpanded = !SidebarExpanded;
-    [RelayCommand]
     private async Task AddFolderAsync()
     {
-        if (IsIndexing)
-            return;
         try
         {
-            var folder = await DesktopActions.PickFolderAsync("Ajouter un dossier à PixSeek");
-            if (folder == null)
+            var path = await DesktopActions.PickFolderAsync(TranslationService.Text("AddFolder"));
+            if (path == null)
                 return;
-            var added = await _db.AddFolderAsync(folder, true);
+            await _db.AddFolderAsync(path, true);
             PageIndex = 1;
             await Library.LoadAsync();
-            await RunScanAsync([added], false);
+            _monitor.Update(await _db.FoldersAsync());
+            await CheckForLibraryChangesAsync();
         }
         catch (Exception e)
         {
@@ -220,42 +216,73 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
-    private async Task RescanAsync()
+    public async Task CheckForLibraryChangesAsync()
     {
-        if (!IsIndexing)
-            await RunScanAsync(await _db.FoldersAsync(), false);
+        if (_stopped)
+            return;
+        if (IsIndexing || Settings.IsModelBusy)
+        {
+            _rescanRequested = true;
+            return;
+        }
+
+        var folders = await _db.FoldersAsync();
+        if (folders.Count > 0)
+            await RunScanAsync(folders, false);
     }
 
     [RelayCommand]
+    private Task RescanAsync() => CheckForLibraryChangesAsync();
+    [RelayCommand]
     private async Task ReindexAsync()
     {
-        if (!IsIndexing)
+        await CancelAndWaitAsync();
+        if (!_stopped)
             await RunScanAsync(await _db.FoldersAsync(), true);
+    }
+
+    private async Task CancelAndWaitAsync()
+    {
+        ++_modelScanRequest;
+        _rescanRequested = false;
+        _indexControl?.Cancel();
+        while (IsIndexing)
+            await Task.Delay(30);
     }
 
     private async Task RunScanAsync(IReadOnlyList<LibraryFolder> folders, bool force)
     {
+        if (_stopped)
+            return;
+        if (IsIndexing)
+        {
+            _rescanRequested = true;
+            return;
+        }
+
         IsIndexing = true;
         IndexProgress = 0;
         IsIndexProgressIndeterminate = true;
-        _indexControl = new();
+        using var control = new JobControl();
+        _indexControl = control;
         var progress = new Progress<WorkProgress>(p =>
         {
-            if (!IsIndexing)
+            if (!IsIndexing || !ReferenceEquals(_indexControl, control))
                 return;
-            Status = p.Message;
+            Status = TranslationService.Text("Indexing") + (p.Total > 0 ? $" {p.Completed}/{p.Total}" : "");
             IsIndexProgressIndeterminate = p.IsIndeterminate;
             if (!p.IsIndeterminate)
                 IndexProgress = Math.Max(IndexProgress, Math.Clamp(p.Fraction * 100, 0, 100));
         });
         try
         {
-            await Task.Run(() => _indexer.ScanAsync(folders, _indexControl, progress, force));
+            await _indexer.ScanAsync(folders, control, progress, force);
+            IndexProgress = 100;
+            Status = TranslationService.Text("IndexComplete");
         }
         catch (OperationCanceledException)
         {
-            Status = "Indexation interrompue · Rescanner pour reprendre";
+            Status = TranslationService.Text("IndexInterrupted");
         }
         catch (Exception e)
         {
@@ -263,14 +290,18 @@ public partial class MainViewModel : ViewModelBase
         }
         finally
         {
-            _indexControl.Dispose();
             _indexControl = null;
-            IsIndexing = false;
             IsIndexProgressIndeterminate = false;
             IsPaused = false;
             await Library.LoadAsync(resetPage: false);
-            await UpdateStatsAsync();
             await Settings.LoadAsync();
+            _monitor.Update(await _db.FoldersAsync());
+            IsIndexing = false;
+            if (_rescanRequested && !_stopped && !Settings.IsModelBusy)
+            {
+                _rescanRequested = false;
+                Dispatcher.UIThread.Post(() => _ = CheckForLibraryChangesAsync());
+            }
         }
     }
 
@@ -284,7 +315,6 @@ public partial class MainViewModel : ViewModelBase
         else
             _indexControl.Pause();
         IsPaused = !IsPaused;
-        Status = IsPaused ? "Pause après le média en cours" : "Reprise de l'indexation";
     }
 
     [RelayCommand]
@@ -292,14 +322,14 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private async Task RemoveFolderAsync(LibraryFolder? folder)
     {
-        if (folder == null || IsIndexing)
+        if (folder == null)
             return;
         try
         {
+            await CancelAndWaitAsync();
             await _db.RemoveFolderAsync(folder.Id);
             await Library.LoadAsync();
-            await UpdateStatsAsync();
-            Status = "Dossier retiré de la bibliothèque. Fichiers conservés.";
+            _monitor.Update(await _db.FoldersAsync());
         }
         catch (Exception e)
         {
@@ -307,47 +337,17 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    [RelayCommand]
-    private async Task ToggleRecursiveAsync(LibraryFolder? folder)
+    public async Task SetRecursiveAsync(LibraryFolder folder, bool recursive)
     {
-        if (folder == null || IsIndexing)
+        if (folder.Recursive == recursive)
             return;
         try
         {
-            await _db.SetFolderRecursiveAsync(folder.Id, !folder.Recursive);
+            await CancelAndWaitAsync();
+            await _db.SetFolderRecursiveAsync(folder.Id, recursive);
             await Library.LoadAsync();
-            Status = "Sous-dossiers : " + (!folder.Recursive ? "inclus" : "exclus") + ". Rescannez pour appliquer.";
-        }
-        catch (Exception e)
-        {
-            ShowError(e.Message);
-        }
-    }
-
-    private async Task UpdateStatsAsync()
-    {
-        var s = await _db.StatsAsync();
-        Photos = s.Photos;
-        Videos = s.Videos;
-        FolderCount = s.Folders;
-        Indexed = s.Indexed;
-        Pending = s.Pending;
-        AiStatus = _models.FilesPresent ? "Modèle local disponible · CPU" : "Téléchargez le modèle dans Paramètres";
-    }
-
-    private void OpenMedia(MediaCardViewModel card)
-    {
-        try
-        {
-            if (card.IsVideo)
-            {
-                DesktopActions.PlayVideo(card.Media, card.Timestamp, _tools);
-                Status = "FFplay · Espace : pause · flèches : seek · 9/0 : volume · F : plein écran";
-                return;
-            }
-
-            var viewer = new Views.MediaViewerWindow(Library.Cards, card, _tools, Optimizer, () => IsCompressionDialogOpen = true);
-            viewer.Show(DesktopActions.MainWindow!);
+            _monitor.Update(await _db.FoldersAsync());
+            await CheckForLibraryChangesAsync();
         }
         catch (Exception e)
         {
@@ -357,9 +357,29 @@ public partial class MainViewModel : ViewModelBase
 
     public void Stop()
     {
+        ++_modelScanRequest;
+        _stopped = true;
         _refreshTimer.Stop();
         _indexControl?.Cancel();
         Optimizer.Stop();
         Settings.Stop();
+        Viewer.Stop();
+    }
+
+    public async Task ShutdownAsync()
+    {
+        _stopped = true;
+        _refreshTimer.Stop();
+        Optimizer.Stop();
+        Settings.Stop();
+        await CancelAndWaitAsync();
+        await Viewer.CloseCommand.ExecuteAsync(null);
+        await Settings.PendingSave;
+        if (Optimizer.ValidateCommand.ExecutionTask is { } encoding)
+            await encoding;
+        if (Settings.ManageModelCommand.ExecutionTask is { } modelDownload)
+            await modelDownload;
+        if (Settings.ActivateModelCommand.ExecutionTask is { } modelSwitch)
+            await modelSwitch;
     }
 }

@@ -23,11 +23,16 @@ public static class AppServices
         s.AddSingleton<FfprobeService>();
         s.AddSingleton<FfmpegService>();
         s.AddSingleton<ThumbnailService>();
+        s.AddSingleton<ImagePreviewCache>();
+        s.AddSingleton<MediaViewerViewModel>();
+        s.AddSingleton<LibraryMonitor>();
         s.AddSingleton<ModelManager>();
         s.AddSingleton<IExecutionProviderFactory, CpuExecutionProviderFactory>();
         s.AddSingleton<OnnxEmbeddingService>();
+        s.AddSingleton<ILocalEmbeddingService>(provider => provider.GetRequiredService<OnnxEmbeddingService>());
         s.AddSingleton<LibraryIndexer>();
         s.AddSingleton<CompressionProfileResolver>();
+        s.AddSingleton<ICompressionCodecPolicy, CompressionCodecPolicy>();
         s.AddSingleton<CompressionVerificationService>();
         s.AddSingleton<MediaEncoder>();
         s.AddSingleton<MediaCompressionService>();

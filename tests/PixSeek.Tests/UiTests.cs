@@ -13,6 +13,7 @@ using PixSeek.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using PixSeek.ViewModels;
 using PixSeek.Views;
+using PixSeek.Localization;
 using Xunit;
 
 [assembly: AvaloniaTestApplication(typeof(PixSeek.Tests.UiTestAppBuilder))]
@@ -29,7 +30,7 @@ public static class UiTestAppBuilder
     }
 }
 
-public sealed class UiTests
+public sealed partial class UiTests
 {
     private static async Task<MainViewModel> PrepareAsync()
     {
@@ -39,6 +40,8 @@ public sealed class UiTests
         var db = PixSeek.App.Services.GetRequiredService<LibraryDatabase>();
         foreach (var folder in await db.FoldersAsync())
             await db.RemoveFolderAsync(folder.Id);
+        vm.Settings.Language = vm.Settings.Languages.Single(l => l.Id == "fr");
+        await vm.Settings.PendingSave;
         vm.Library.Query = "";
         await vm.Library.ClearFiltersCommand.ExecuteAsync(null);
         vm.PageIndex = 1;
@@ -159,16 +162,17 @@ public sealed class UiTests
         Assert.Equal(0, resets);
         Assert.Same(thumbnail, gallery.GetVisualDescendants().OfType<AsyncThumbnail>().First());
         Assert.False(vm.Library.IsLoading);
-        gallery.FindControl<ComboBox>("MediaTypeFilter")!.SelectedItem = "Photos";
+        gallery.FindControl<ComboBox>("MediaTypeFilter")!.SelectedItem = vm.Library.Types.Single(t => t.Id == "Photos");
         await vm.Library.PendingFilterRefresh;
         Assert.Equal(2, vm.Library.Cards.Count);
-        gallery.FindControl<CalendarDatePicker>("FromDateFilter")!.SelectedDate = new DateTime(2025, 2, 20);
+        Assert.Empty(gallery.GetVisualDescendants().OfType<CalendarDatePicker>());
+        var folderFilter = gallery.FindControl<ComboBox>("FolderFilter")!;
+        folderFilter.SelectedItem = vm.Library.FolderOptions.Single(f => f.Id == folder.Id);
         await vm.Library.PendingFilterRefresh;
-        Assert.Single(vm.Library.Cards);
-        Assert.Equal("recent.jpg", vm.Library.Cards[0].FileName);
-        gallery.FindControl<CalendarDatePicker>("ToDateFilter")!.SelectedDate = new DateTime(2025, 2, 20);
+        Assert.Equal(2, vm.Library.Cards.Count);
+        folderFilter.SelectedItem = vm.Library.FolderOptions[0];
         await vm.Library.PendingFilterRefresh;
-        Assert.Single(vm.Library.Cards);
+        Assert.Equal(0, vm.Library.SelectedFolder!.Id);
         await vm.Library.ClearFiltersCommand.ExecuteAsync(null);
         Assert.Equal(3, vm.Library.Cards.Count);
         vm.Stop();
@@ -219,6 +223,8 @@ public sealed class UiTests
         vm.Optimizer.PresetIndex = 2;
         Assert.Equal(38, vm.Optimizer.CurrentOptions.Crf);
         vm.Optimizer.ShowAdvanced = true;
+        Assert.Equal("JPEG XL", vm.Optimizer.ImageCodec);
+        Assert.Equal("AV1", vm.Optimizer.VideoCodec);
         window.UpdateLayout();
         dialog.FindControl<Slider>("ImageQualitySlider")!.Value = 95;
         dialog.FindControl<Slider>("VideoQualitySlider")!.Value = 86;
@@ -240,5 +246,196 @@ public sealed class UiTests
         Assert.False(vm.IsCompressionDialogOpen);
         vm.Stop();
         window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task Viewer_IsEmbedded_ZoomsAtCursor_CachesPhotos_AndPlaysVideoWithSeek()
+    {
+        var vm = await PrepareAsync();
+        var services = PixSeek.App.Services;
+        var paths = services.GetRequiredService<IPlatformPaths>();
+        var db = services.GetRequiredService<LibraryDatabase>();
+        var source = Path.Combine(paths.Data, "viewer-test");
+        Directory.CreateDirectory(source);
+        var fixture = Path.Combine(TestEnvironment.FindRoot(), "tests", "fixtures");
+        foreach (var name in new[]
+        {
+            "coffee.png",
+            "chelsea.png"
+        }
+
+        )
+            File.Copy(Path.Combine(fixture, name), Path.Combine(source, name), true);
+        var folder = await db.AddFolderAsync(source, true);
+        foreach (var name in new[]
+        {
+            "coffee.png",
+            "chelsea.png"
+        }
+
+        )
+            await db.SaveMediaAsync(new() { LibraryFolderId = folder.Id, FullPath = Path.Combine(source, name), ThumbnailPath = Path.Combine(fixture, name) });
+        await vm.Library.LoadAsync();
+        var window = Open(vm);
+        var cache = services.GetRequiredService<PixSeek.Services.ImagePreviewCache>();
+        await cache.ClearAsync();
+        var card = vm.Library.Cards[0];
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await vm.Viewer.OpenAsync(vm.Library.Cards, card);
+        var coldMs = watch.Elapsed.TotalMilliseconds;
+        window.UpdateLayout();
+        await Task.Delay(60);
+        Assert.True(vm.Viewer.IsOpen);
+        Assert.False(vm.Viewer.HasError, vm.Viewer.ErrorMessage);
+        var viewer = window.GetVisualDescendants().OfType<MediaViewerView>().Single();
+        Assert.Same(window, TopLevel.GetTopLevel(viewer));
+        var photo = viewer.FindControl<ZoomImage>("PhotoSurface")!;
+        var anchor = new Point(700, 350);
+        var world = (anchor - new Point(photo.Translation.X, photo.Translation.Y)) / photo.Scale;
+        window.MouseWheel(photo.TranslatePoint(anchor, window)!.Value, new Vector(0, 2));
+        var after = (anchor - new Point(photo.Translation.X, photo.Translation.Y)) / photo.Scale;
+        Assert.InRange(Math.Abs(after.X - world.X) + Math.Abs(after.Y - world.Y), 0, .001);
+        Assert.True(photo.Scale > 1);
+        Capture(window, "pixseek-viewer-photo");
+        var originalBitmap = vm.Viewer.Image;
+        await vm.Viewer.CloseCommand.ExecuteAsync(null);
+        watch.Restart();
+        await vm.Viewer.OpenAsync(vm.Library.Cards, card);
+        var cachedMs = watch.Elapsed.TotalMilliseconds;
+        Assert.Same(originalBitmap, vm.Viewer.Image);
+        Assert.True(cache.CacheHits > 0);
+        await Task.Delay(40);
+        window.KeyPress(Key.Right, RawInputModifiers.None, PhysicalKey.ArrowRight, null);
+        await vm.Viewer.PendingLoad;
+        Assert.NotSame(originalBitmap, vm.Viewer.Image);
+        await vm.Viewer.CloseCommand.ExecuteAsync(null);
+        var movie = Path.Combine(source, "video test.mp4");
+        var runner = services.GetRequiredService<PixSeek.Media.ProcessRunner>();
+        var tools = services.GetRequiredService<PixSeek.Media.NativeTools>();
+        await runner.CheckedAsync(tools.PathFor("ffmpeg"), ["-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=15", "-f", "lavfi", "-i", "sine=frequency=440", "-t", "4", "-c:v", "libx264", "-c:a", "aac", movie]);
+        var video = new MediaCardViewModel(new(new() { Id = 999, FullPath = movie, MediaType = MediaType.Video, Width = 320, Height = 180, DurationMilliseconds = 4000 }, .7, 1000, ""));
+        await vm.Viewer.OpenAsync([video, card], video);
+        Assert.False(vm.Viewer.HasError, vm.Viewer.ErrorMessage);
+        await Task.Delay(1200);
+        window.UpdateLayout();
+        Assert.True(vm.Viewer.IsVideo);
+        Assert.True(vm.Viewer.Position >= 1000);
+        Assert.True(vm.Viewer.RenderedVideoFrames > 0);
+        vm.Viewer.TogglePlaybackCommand.Execute(null);
+        await Task.Delay(150);
+        Assert.False(vm.Viewer.IsPlaying);
+        vm.Viewer.Position = 2200;
+        vm.Viewer.Volume = 25;
+        vm.Viewer.Muted = true;
+        await Task.Delay(150);
+        Assert.InRange(vm.Viewer.Position, 1800, 2600);
+        Capture(window, "pixseek-viewer-video");
+        viewer.FindControl<Slider>("VideoSeek")!.Focus();
+        window.KeyPress(Key.Right, RawInputModifiers.None, PhysicalKey.ArrowRight, null);
+        await vm.Viewer.PendingLoad;
+        Assert.False(vm.Viewer.IsVideo);
+        await vm.Viewer.CloseCommand.ExecuteAsync(null);
+        await File.WriteAllTextAsync(Path.Combine(TestEnvironment.FindRoot(), "artifacts", "preview-performance.json"), System.Text.Json.JsonSerializer.Serialize(new { coldMs, cachedMs }));
+        vm.Stop();
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task Settings_TranslateLive_Autosave_AndLibraryMonitorsAdditionsAndDeletions()
+    {
+        var vm = await PrepareAsync();
+        var window = Open(vm);
+        vm.PageIndex = 4;
+        Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Content is "Modifier" or "Rescanner / reprendre" or "Enregistrer");
+        var settingsView = window.GetVisualDescendants().OfType<SettingsView>().Single();
+        foreach (var language in vm.Settings.Languages)
+        {
+            vm.Settings.Language = language;
+            await vm.Settings.PendingSave;
+            window.UpdateLayout();
+            Assert.Contains(settingsView.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == TranslationService.Text("General"));
+        }
+
+        vm.Settings.Language = vm.Settings.Languages.Single(l => l.Id == "en");
+        await vm.Settings.PendingSave;
+        Capture(window, "pixseek-settings-en");
+        var store = PixSeek.App.Services.GetRequiredService<SettingsStore>();
+        Assert.Equal("en", store.Current.Language);
+        vm.Settings.Theme = vm.Settings.Themes.Single(t => t.Id == "Sombre");
+        await vm.Settings.PendingSave;
+        Assert.Equal(ThemeVariant.Dark, window.ActualThemeVariant);
+        var paths = PixSeek.App.Services.GetRequiredService<IPlatformPaths>();
+        var db = PixSeek.App.Services.GetRequiredService<LibraryDatabase>();
+        var source = Path.Combine(paths.Data, "watch-test");
+        Directory.CreateDirectory(source);
+        await db.AddFolderAsync(source, true);
+        await vm.CheckForLibraryChangesAsync();
+        var added = Path.Combine(source, "new photo.png");
+        File.Copy(Path.Combine(TestEnvironment.FindRoot(), "tests", "fixtures", "coffee.png"), added);
+        var timeout = DateTime.UtcNow.AddSeconds(20);
+        while ((await db.FindAsync(added))?.IndexedVersion == null && DateTime.UtcNow < timeout)
+            await Task.Delay(100);
+        Assert.NotNull((await db.FindAsync(added))?.IndexedVersion);
+        var indexed = (await db.FindAsync(added))!;
+        await vm.Settings.ClearCachesCommand.ExecuteAsync(null);
+        Assert.True(File.Exists((await db.FindAsync(added))!.ThumbnailPath));
+        Assert.Equal(indexed.IndexedVersion, (await db.FindAsync(added))!.IndexedVersion);
+        Assert.True(File.Exists(added));
+        File.Delete(added);
+        timeout = DateTime.UtcNow.AddSeconds(10);
+        while ((await db.FindAsync(added))?.Status != "Absent" && DateTime.UtcNow < timeout)
+            await Task.Delay(100);
+        Assert.Equal("Absent", (await db.FindAsync(added))?.Status);
+        await using (var c = await db.OpenAsync())
+        {
+            using var command = c.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM MediaEmbedding";
+            Assert.Equal(0L, (long)(await command.ExecuteScalarAsync())!);
+        }
+
+        vm.Stop();
+        window.Close();
+    }
+
+    [AvaloniaFact]
+    public async Task Models_ActivateExclusively_RebuildVectors_AndPersistChoice()
+    {
+        var vm = await PrepareAsync();
+        var db = PixSeek.App.Services.GetRequiredService<LibraryDatabase>();
+        var paths = PixSeek.App.Services.GetRequiredService<IPlatformPaths>();
+        var source = Path.Combine(paths.Data, "model-switch-library");
+        Directory.CreateDirectory(source);
+        for (var i = 0; i < 24; i++)
+            File.Copy(Path.Combine(TestEnvironment.FindRoot(), "tests", "fixtures", "coffee.png"), Path.Combine(source, $"photo-{i}.png"), true);
+        var folder = await db.AddFolderAsync(source, true);
+        var siglip = vm.Settings.Models.Single(m => m.Id == "siglip2");
+        Assert.True(siglip.IsInstalled);
+        var activating = vm.Settings.ActivateModelCommand.ExecuteAsync(siglip);
+        Assert.True(siglip.IsActive);
+        Assert.True(siglip.CanSelect);
+        Assert.Single(vm.Settings.Models, m => m.IsActive);
+        await activating;
+        await UntilAsync(() => vm.IsIndexing);
+        Assert.False(vm.Settings.IsModelBusy);
+        Assert.All(vm.Settings.Models, m => Assert.True(m.CanSelect));
+        vm.PauseIndexCommand.Execute(null);
+        Assert.True(vm.IsPaused);
+        Assert.False(vm.HasError, vm.ErrorMessage);
+        Assert.True(siglip.IsActive);
+        Assert.Single(vm.Settings.Models, m => m.IsActive);
+        var store = PixSeek.App.Services.GetRequiredService<SettingsStore>();
+        Assert.Equal("siglip2", store.Current.ActiveModelId);
+        var xlmr = vm.Settings.Models.Single(m => m.Id == "xlmr");
+        var switchingBack = vm.Settings.ActivateModelCommand.ExecuteAsync(xlmr);
+        Assert.True(xlmr.IsActive);
+        Assert.False(siglip.IsActive);
+        await switchingBack;
+        Assert.True(xlmr.IsActive);
+        Assert.False(siglip.IsActive);
+        Assert.Equal("xlmr", store.Current.ActiveModelId);
+        await UntilAsync(() => vm.IsIndexing);
+        await UntilAsync(() => !vm.IsIndexing && !vm.Settings.IsModelBusy, timeoutMs: 30000);
+        await vm.RemoveFolderCommand.ExecuteAsync(folder);
+        vm.Stop();
     }
 }

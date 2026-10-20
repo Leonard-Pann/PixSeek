@@ -37,3 +37,11 @@ Le paquet vise au minimum la compatibilité glibc du runner (Ubuntu 24.04) ; il 
 Le workflow possède des jobs Windows, Ubuntu, macOS ARM64 et Intel avec des runners natifs. Le job Windows exécute la suite complète. Les jobs Unix compilent et exécutent le diagnostic sans interface ; ils ne sont pas une validation des interactions graphiques. Le workflow n'a pas été lancé depuis la machine locale et ses résultats sont inconnus.
 
 Les archives sqlite-vec sont propres à chaque architecture et leurs hashes sont épinglés. ONNX Runtime et le tokenizer sont obtenus via NuGet avec leurs actifs RID. Un binaire Windows n'est jamais utilisé pour un autre OS. L'absence d'une extension ou d'un codec reste une erreur explicite, pas une fonctionnalité simulée.
+
+## LibVLC intégré depuis 0.2.0
+
+Windows : LibVLCSharp 3.10.2 + VideoLAN.LibVLC.Windows 3.0.23.1 via NuGet. Les fichiers x64 de libvlc et plugins sont copiés sous libvlc/win-x64. Les architectures x86 et ARM64 inutiles ne sont pas copiées dans la publication x64. Le player est chargé à partir des fichiers publiés, sans VLC installé.
+
+Unix : préparer le SDK LibVLC et plugins sur le runner (Linux : libvlc-dev, vlc-plugin-base, pkg-config ; Mac : VLC.app de la bonne architecture et dylibbundler). stage-unix.sh appelle stage-vlc-unix.sh, qui rassemble le moteur, les modules et bibliothèques sous runtimes/<RID>/native/vlc. wrap-unix-player.sh place un lanceur relatif devant l'apphost et définit les chemins du loader et des plugins ; publish-linux.sh et publish-macos.sh l'appellent. Le code charge explicitement ce répertoire quand il est présent.
+
+Cette nouvelle voie Unix est une stratégie de packaging non exécutée sur la machine Windows. La fermeture des dépendances, les modules audio, la signature du bundle et les chemins dyld doivent être validés sur runners natifs ; aucun succès Mac/Linux n'est revendiqué pour cette révision.

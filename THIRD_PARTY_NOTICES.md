@@ -24,3 +24,10 @@ FFmpeg est compilé avec des bibliothèques GPL, notamment x264/x265. Ce binaire
 Les délégués ImageMagick ont leurs propres licences (libheif, libjxl, libjpeg, libpng, libtiff, WebP, lcms, etc.). Le SBOM officiel de l'archive est conservé dans `licenses/`. L'activation d'AV1/AVIF/HEIF ne constitue aucune garantie concernant les brevets applicables dans un pays donné.
 
 Corpus de tests scikit-image v0.19.3 : `chelsea.png` (Stefan van der Walt, CC0), `coffee.png` (Rachel Michetti, CC0), `astronaut.png` (NASA, domaine public). Voir `tests/fixtures/README.md` et les conditions amont.
+
+## Ajouts 0.2.0
+
+- LibVLCSharp **3.10.2**, VideoLAN, LGPL-2.1-or-later : https://code.videolan.org/videolan/LibVLCSharp ; licence dans licenses/LibVLCSharp-LGPL-2.1.txt.
+- VideoLAN.LibVLC.Windows **3.0.23.1**, paquet natif officiel VideoLAN, LGPL-2.1-or-later selon ses métadonnées NuGet : https://www.nuget.org/packages/VideoLAN.LibVLC.Windows/3.0.23.1 ; moteur/plugins publiés séparément de l'assembly applicatif, remplacement dynamique possible. Source et construction du paquet : https://code.videolan.org/videolan/libvlc-nuget ; sources VLC : https://code.videolan.org/videolan/vlc. Les modules embarqués et dépendances conservent leurs conditions propres ; fournir leurs sources correspondantes avant redistribution publique.
+- SigLIP2 ViT-B/16 WebLI, Apache-2.0 (poids amont timm/ViT-B-16-SigLIP2) : https://huggingface.co/timm/ViT-B-16-SigLIP2 ; export ONNX Immich, révision 5f3fc29104ebcf51e9d893af57604badd51a3ea6 : https://huggingface.co/immich-app/ViT-B-16-SigLIP2__webli. SHA-256 et tailles dans tools/models/siglip2.json.
+- SkiaSharp est une dépendance d'Avalonia.Skia, licence MIT avec notices de Skia et dépendances natives : https://github.com/mono/SkiaSharp.

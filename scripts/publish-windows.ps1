@@ -1,4 +1,4 @@
-param([switch]$IncludeModel)
+param([switch]$IncludeModel = $true)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 & "$PSScriptRoot/verify-dependencies.ps1"
@@ -13,7 +13,12 @@ if($IncludeModel) {
     & "$PSScriptRoot/install-model.ps1"
     $modelTarget=Join-Path $output 'models/weights'
     New-Item -ItemType Directory -Force $modelTarget | Out-Null
-    Copy-Item -Path "$repo/artifacts/models/*" -Destination $modelTarget -Recurse -Force
+    $manifest = Get-Content "$repo/tools/models/manifest.json" -Raw | ConvertFrom-Json
+    foreach ($asset in $manifest.files) {
+        $target = Join-Path $modelTarget $asset.path
+        New-Item -ItemType Directory -Force (Split-Path $target -Parent) | Out-Null
+        Copy-Item -LiteralPath (Join-Path "$repo/artifacts/models" $asset.path) -Destination $target -Force
+    }
 }
 & "$PSScriptRoot/verify-dependencies.ps1" -NativePath "$output/runtimes/win-x64/native"
 Write-Output "Publication : $output/PixSeek.exe"

@@ -33,13 +33,18 @@ public partial class MainView : UserControl
         {
             _subscribed = vm;
             vm.PropertyChanged += OnViewModelChanged;
+            vm.Viewer.PropertyChanged += OnViewerChanged;
         }
     }
 
     private void Unsubscribe()
     {
         if (_subscribed != null)
+        {
             _subscribed.PropertyChanged -= OnViewModelChanged;
+            _subscribed.Viewer.PropertyChanged -= OnViewerChanged;
+        }
+
         _subscribed = null;
     }
 
@@ -47,5 +52,11 @@ public partial class MainView : UserControl
     {
         if (args.PropertyName == nameof(MainViewModel.IsCompressionDialogOpen) && _subscribed?.IsCompressionDialogOpen == true)
             Dispatcher.UIThread.Post(() => this.GetVisualDescendants().OfType<CompressionDialogView>().FirstOrDefault()?.FocusInput());
+    }
+
+    private void OnViewerChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(MediaViewerViewModel.IsOpen) && _subscribed?.Viewer.IsOpen == true)
+            Dispatcher.UIThread.Post(() => this.FindControl<MediaViewerView>("ViewerOverlay")?.Focus());
     }
 }

@@ -62,17 +62,30 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
             INSERT OR IGNORE INTO SchemaMigration VALUES(1,CURRENT_TIMESTAMP);
             UPDATE CompressionJob SET Status='Interrompu' WHERE Status='En cours';
             """, ct);
+        // Older upserts updated the JSON record but left the filter columns stale.
+        // Repair existing libraries once, without discarding thumbnails or embeddings.
+        await ExecuteAsync(c, """
+            UPDATE MediaFile SET
+                MediaType=CAST(json_extract(Payload,'$.MediaType') AS INTEGER),
+                LibraryFolderId=CAST(json_extract(Payload,'$.LibraryFolderId') AS INTEGER),
+                FileName=json_extract(Payload,'$.FileName'), Extension=json_extract(Payload,'$.Extension')
+            WHERE NOT EXISTS(SELECT 1 FROM SchemaMigration WHERE Version=2);
+            CREATE INDEX IF NOT EXISTS IX_Media_Filter ON MediaFile(MediaType,LibraryFolderId,LastModifiedAt DESC,Id DESC);
+            INSERT OR IGNORE INTO SchemaMigration VALUES(2,CURRENT_TIMESTAMP);
+            """, ct);
         if (File.Exists(VecPath))
         {
             using var cmd = c.CreateCommand();
             cmd.CommandText = "SELECT vec_version()";
             VectorStatus = (string)(await cmd.ExecuteScalarAsync(ct))!;
+            cmd.CommandText = "SELECT COALESCE(MAX(EmbeddingDimensions),0) FROM ModelInfo WHERE Status='Actif'";
+            _dimensions = Convert.ToInt32(await cmd.ExecuteScalarAsync(ct));
         }
         else
             VectorStatus = $"Extension absente : {VecPath}";
     }
 
-    public async Task ConfigureVectorsAsync(string modelVersion, int dimensions, CancellationToken ct = default)
+    public async Task ConfigureVectorsAsync(string modelVersion, int dimensions, CancellationToken ct = default, string? modelName = null)
     {
         if (dimensions is < 1 or > 4096)
             throw new ArgumentOutOfRangeException(nameof(dimensions));
@@ -99,7 +112,9 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
             await ExecuteAsync(c, $"CREATE VIRTUAL TABLE IF NOT EXISTS MediaVector USING vec0(embedding float[{dimensions}] distance_metric=cosine);", ct, tx);
             using var insert = c.CreateCommand();
             insert.Transaction = tx;
-            insert.CommandText = "INSERT INTO ModelInfo(Id,Name,Version,EmbeddingDimensions,PreprocessingVersion,LanguageCapabilities,Status) VALUES($id,'XLM-RoBERTa / ViT-B-32',$id,$d,'openclip-224-bicubic-center-rgb-v1','multilingual / français','Actif') ON CONFLICT(Id) DO UPDATE SET Status='Actif'";
+            insert.CommandText = "INSERT INTO ModelInfo(Id,Name,Version,EmbeddingDimensions,PreprocessingVersion,LanguageCapabilities,Status) VALUES($id,$name,$id,$d,$preprocessing,'multilingual','Actif') ON CONFLICT(Id) DO UPDATE SET Status='Actif',Name=$name";
+            insert.Parameters.AddWithValue("$name", modelName ?? modelVersion);
+            insert.Parameters.AddWithValue("$preprocessing", modelVersion.Split(':').Last());
             insert.Parameters.AddWithValue("$id", modelVersion);
             insert.Parameters.AddWithValue("$d", dimensions);
             await insert.ExecuteNonQueryAsync(ct);
@@ -192,7 +207,7 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
         cmd.CommandText = """
             INSERT INTO MediaFile(LibraryFolderId,FullPath,FileName,Extension,MediaType,SizeBytes,LastModifiedAt,Width,Height,DurationMilliseconds,ThumbnailPath,Codec,Status,ErrorMessage,IndexedVersion,Payload)
             VALUES($folder,$path,$name,$ext,$type,$size,$date,$w,$h,$duration,$thumb,$codec,$status,$error,$version,$json)
-            ON CONFLICT(FullPath) DO UPDATE SET SizeBytes=$size,LastModifiedAt=$date,Width=$w,Height=$h,DurationMilliseconds=$duration,ThumbnailPath=$thumb,Codec=$codec,Status=$status,ErrorMessage=$error,IndexedVersion=$version,Payload=$json RETURNING Id
+            ON CONFLICT(FullPath) DO UPDATE SET LibraryFolderId=$folder,FileName=$name,Extension=$ext,MediaType=$type,SizeBytes=$size,LastModifiedAt=$date,Width=$w,Height=$h,DurationMilliseconds=$duration,ThumbnailPath=$thumb,Codec=$codec,Status=$status,ErrorMessage=$error,IndexedVersion=$version,Payload=$json RETURNING Id
             """;
         foreach (var(k, v)in new (string, object? )[]
         {
@@ -251,6 +266,25 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
         while (await r.ReadAsync(ct))
             result.Add(r.GetString(0));
         return result;
+    }
+
+    public async Task<IReadOnlyList<MediaFile>> FilenameCandidatesAsync(string query, string type = "Tout", long? folder = null, CancellationToken ct = default)
+    {
+        await using var c = await OpenAsync(ct);
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT Id,Payload,IndexedVersion,FileName FROM MediaFile WHERE Status != 'Absent' AND ($type < 0 OR MediaType=$type) AND ($folder IS NULL OR LibraryFolderId=$folder)";
+        cmd.Parameters.AddWithValue("$type", type == "Photos" ? 0 : type == "Vidéos" ? 1 : -1);
+        cmd.Parameters.AddWithValue("$folder", (object? )folder ?? DBNull.Value);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var candidates = new List<(MediaFile Media, double Score)>();
+        while (await reader.ReadAsync(ct))
+        {
+            var score = HybridRanking.NameConfidence(query, reader.GetString(3));
+            if (score > 0)
+                candidates.Add((ReadMedia(reader), score));
+        }
+
+        return candidates.OrderByDescending(x => x.Score).Take(240).Select(x => x.Media).ToArray();
     }
 
     public async Task<LibraryStats> StatsAsync(CancellationToken ct = default)
@@ -374,7 +408,10 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
         }
     }
 
-    public async Task<IReadOnlyList<SearchResult>> SearchAsync(ReadOnlyMemory<float> queryEmbedding, int maxResults, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<SearchResult>> SearchAsync(ReadOnlyMemory<float> queryEmbedding, int maxResults, CancellationToken cancellationToken)
+        => SearchFilteredAsync(queryEmbedding, maxResults, "Tout", null, cancellationToken);
+
+    public async Task<IReadOnlyList<SearchResult>> SearchFilteredAsync(ReadOnlyMemory<float> queryEmbedding, int maxResults, string type, long? folder, CancellationToken cancellationToken = default)
     {
         if (maxResults is < 1 or > 512)
             throw new ArgumentOutOfRangeException(nameof(maxResults));
@@ -383,12 +420,21 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
         await using var c = await OpenAsync(cancellationToken);
         using var cmd = c.CreateCommand();
         cmd.CommandText = """
-            WITH nearest AS (SELECT rowid,distance FROM MediaVector WHERE embedding MATCH $vector AND k=$k)
+            WITH nearest AS (
+                SELECT rowid,distance FROM MediaVector WHERE embedding MATCH $vector AND k=$k
+                AND rowid IN (
+                    SELECT e.Id FROM MediaEmbedding e JOIN MediaFile m ON m.Id=e.MediaFileId
+                    WHERE m.Status != 'Absent' AND m.IndexedVersion IS NOT NULL
+                    AND ($type < 0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder)
+                )
+            )
             SELECT m.Id,m.Payload,m.IndexedVersion,n.distance,f.TimestampMilliseconds,f.ThumbnailPath
             FROM nearest n JOIN MediaEmbedding e ON e.Id=n.rowid JOIN MediaFile m ON m.Id=e.MediaFileId LEFT JOIN VideoFrame f ON f.Id=e.VideoFrameId
             WHERE m.Status != 'Absent' AND m.IndexedVersion IS NOT NULL ORDER BY n.distance
             """;
         cmd.Parameters.AddWithValue("$vector", VectorBytes(queryEmbedding.Span));
+        cmd.Parameters.AddWithValue("$type", type == "Photos" ? 0 : type == "Vidéos" ? 1 : -1);
+        cmd.Parameters.AddWithValue("$folder", (object?)folder ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$k", Math.Clamp(maxResults * 8, 1, 4096));
         await using var r = await cmd.ExecuteReaderAsync(cancellationToken);
         var items = new List<SearchResult>();

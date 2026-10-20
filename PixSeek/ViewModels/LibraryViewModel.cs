@@ -1,18 +1,19 @@
 using System.Collections.ObjectModel;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PixSeek.AI;
 using PixSeek.Core;
 using PixSeek.Infrastructure;
+using PixSeek.Localization;
 
 namespace PixSeek.ViewModels;
-public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService embeddings) : ObservableObject
+public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService embeddings, ModelManager models) : ObservableObject
 {
     public ObservableCollection<MediaRow> Rows { get; } = [];
     public ObservableCollection<LibraryFolder> Folders { get; } = [];
-    public string[] Types { get; } = ["Tout", "Photos", "Vidéos"];
-    public string[] Sorts { get; } = ["Date", "Nom", "Taille"];
+    public ObservableCollection<LibraryFolder> FolderOptions { get; } = [];
+    public Choice[] Types { get; } = [new("Tout", "AllMedia"), new("Photos", "Photos"), new("Vidéos", "Videos")];
+    public Choice[] Sorts { get; } = [new("Date", "Date"), new("Nom", "Name"), new("Taille", "Size")];
 
     [ObservableProperty]
     private string _selectedType = "Tout";
@@ -23,32 +24,53 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     [ObservableProperty]
     private string _query = "";
     [ObservableProperty]
-    private string _summary = "Ajoutez un dossier pour commencer.";
+    private string _summary = "";
     [ObservableProperty]
     private bool _isLoading;
     [ObservableProperty]
     private bool _hasMore;
     [ObservableProperty]
-    private int _page;
-    [ObservableProperty]
-    private DateTime? _fromDate;
-    [ObservableProperty]
-    private DateTime? _toDate;
+    private bool _isLoadingMore;
     [ObservableProperty]
     private bool _isSearch;
+    [ObservableProperty]
+    private bool _isSearchBlocked;
+    public Choice SelectedTypeChoice
+    {
+        get => Types.First(c => c.Id == SelectedType);
+        set
+        {
+            if (value != null)
+                SelectedType = value.Id;
+        }
+    }
+
+    public Choice SelectedSortChoice
+    {
+        get => Sorts.First(c => c.Id == SelectedSort);
+        set
+        {
+            if (value != null)
+                SelectedSort = value.Id;
+        }
+    }
+
     private IReadOnlyList<MediaCardViewModel> _cards = [];
     private readonly SemaphoreSlim _loadGate = new(1, 1);
-    private int _columns = 4, _filterVersion;
+    private int _columns = 4, _filterVersion, _loadedFilterVersion = -1;
     private bool _suspendFilters;
     private float[]? _queryVector;
-    private string? _encodedQuery;
+    private string? _encodedQuery, _encodedVersion;
     public IReadOnlyList<MediaCardViewModel> Cards => _cards;
     public Action<MediaCardViewModel>? OpenMedia { get; set; }
     public Action<string>? Error { get; set; }
     public Action<IReadOnlyList<string>>? OptimizeFiles { get; set; }
+    public Action? OpenSettings { get; set; }
     public Func<Task>? AddFolder { get; set; }
     public Task PendingFilterRefresh { get; private set; } = Task.CompletedTask;
 
+    [RelayCommand]
+    private void Settings() => OpenSettings?.Invoke();
     [RelayCommand]
     private async Task AddFolderAsync()
     {
@@ -67,11 +89,13 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     }
 
     [RelayCommand]
-    private async Task RefreshAsync() => await LoadResultsAsync(IsSearch);
+    private Task RefreshAsync() => LoadResultsAsync(IsSearch);
     [RelayCommand]
     private async Task SearchAsync()
     {
-        Page = 0;
+        if (IsSearchBlocked)
+            return;
+        ++_filterVersion;
         await LoadResultsAsync(!string.IsNullOrWhiteSpace(Query));
     }
 
@@ -79,47 +103,34 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     private async Task ClearFiltersAsync()
     {
         _suspendFilters = true;
-        try
-        {
-            SelectedFolder = null;
-            SelectedType = "Tout";
-            FromDate = null;
-            ToDate = null;
-        }
-        finally
-        {
-            _suspendFilters = false;
-        }
-
-        Page = 0;
+        SelectedFolder = FolderOptions.FirstOrDefault();
+        SelectedType = "Tout";
+        _suspendFilters = false;
+        ++_filterVersion;
         await LoadResultsAsync(IsSearch);
     }
 
     [RelayCommand]
-    private async Task NextAsync()
+    private async Task LoadMoreAsync()
     {
-        if (HasMore)
-        {
-            Page++;
-            await LoadResultsAsync(IsSearch);
-        }
+        if (!HasMore || IsSearch || IsLoadingMore || IsLoading)
+            return;
+        await LoadResultsAsync(false, append: true);
     }
 
-    [RelayCommand]
-    private async Task PreviousAsync()
+    partial void OnSelectedTypeChanged(string value)
     {
-        if (Page > 0)
-        {
-            Page--;
-            await LoadResultsAsync(IsSearch);
-        }
+        OnPropertyChanged(nameof(SelectedTypeChoice));
+        ScheduleFilterRefresh();
     }
 
-    partial void OnSelectedTypeChanged(string value) => ScheduleFilterRefresh();
-    partial void OnSelectedSortChanged(string value) => ScheduleFilterRefresh();
+    partial void OnSelectedSortChanged(string value)
+    {
+        OnPropertyChanged(nameof(SelectedSortChoice));
+        ScheduleFilterRefresh();
+    }
+
     partial void OnSelectedFolderChanged(LibraryFolder? value) => ScheduleFilterRefresh();
-    partial void OnFromDateChanged(DateTime? value) => ScheduleFilterRefresh();
-    partial void OnToDateChanged(DateTime? value) => ScheduleFilterRefresh();
     partial void OnQueryChanged(string value)
     {
         if (string.IsNullOrWhiteSpace(value) && IsSearch)
@@ -131,61 +142,90 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
 
     private void ScheduleFilterRefresh()
     {
-        if (_suspendFilters)
-            return;
-        var version = ++_filterVersion;
-        PendingFilterRefresh = ApplyFiltersAfterDelayAsync(version);
+        if (!_suspendFilters)
+            PendingFilterRefresh = ApplyFiltersAfterDelayAsync(++_filterVersion);
     }
 
     private async Task ApplyFiltersAfterDelayAsync(int version)
     {
         await Task.Delay(150);
-        if (version != _filterVersion)
-            return;
-        Page = 0;
-        await LoadResultsAsync(IsSearch);
+        if (version == _filterVersion)
+        {
+            await LoadResultsAsync(IsSearch);
+        }
     }
 
-    private static DateTime? Boundary(DateTime? date, bool nextDay = false) => date.HasValue ? DateTime.SpecifyKind(date.Value.Date.AddDays(nextDay ? 1 : 0), DateTimeKind.Local).ToUniversalTime() : null;
-    private async Task LoadResultsAsync(bool search, bool background = false)
+    public void InvalidateQuery()
     {
+        _queryVector = null;
+        _encodedVersion = null;
+    }
+
+    private long? FolderId => SelectedFolder?.Id > 0 ? SelectedFolder.Id : null;
+
+    private async Task LoadResultsAsync(bool search, bool background = false, bool append = false)
+    {
+        if (search && IsSearchBlocked)
+            return;
         if (background && _loadGate.CurrentCount == 0)
             return;
         await _loadGate.WaitAsync();
-        var showLoading = !background;
-        if (showLoading)
+        if (append && _loadedFilterVersion != _filterVersion)
+        {
+            _loadGate.Release();
+            return;
+        }
+        var version = _filterVersion;
+        if (append)
+            IsLoadingMore = true;
+        else if (!background)
             IsLoading = true;
         try
         {
-            var from = Boundary(FromDate);
-            var to = Boundary(ToDate, true);
-            if (from.HasValue && to.HasValue && from >= to)
-                throw new ArgumentException("La date de début doit précéder la date de fin.");
             IReadOnlyList<SearchResult> results;
             if (search && !string.IsNullOrWhiteSpace(Query))
             {
-                if (_encodedQuery != Query || _queryVector == null)
+                var query = Query;
+                var type = SelectedType;
+                var folder = FolderId;
+                var namesTask = Task.Run(() => db.FilenameCandidatesAsync(query, type, folder));
+                IReadOnlyList<SearchResult> nearest = [];
+                if (models.FilesPresent)
                 {
-                    _queryVector = await embeddings.GenerateTextEmbeddingAsync(Query, default);
-                    _encodedQuery = Query;
+                    if (_encodedQuery != query || _queryVector == null || _encodedVersion != models.Version)
+                    {
+                        _queryVector = await embeddings.GenerateTextEmbeddingAsync(query, default);
+                        _encodedQuery = query;
+                        _encodedVersion = models.Version;
+                    }
+
+                    nearest = await Task.Run(() => db.SearchFilteredAsync(_queryVector, 240, type, folder));
                 }
 
-                var nearest = await db.SearchAsync(_queryVector, 240, default);
-                results = nearest.Where(r => (SelectedType == "Tout" || r.Media.MediaType == (SelectedType == "Photos" ? MediaType.Image : MediaType.Video)) && (SelectedFolder == null || r.Media.LibraryFolderId == SelectedFolder.Id) && (!from.HasValue || r.Media.LastModifiedAt.ToUniversalTime() >= from) && (!to.HasValue || r.Media.LastModifiedAt.ToUniversalTime() < to)).ToArray();
+                results = HybridRanking.Merge(query, nearest, await namesTask, 240);
+                if (version != _filterVersion) return;
                 HasMore = false;
                 IsSearch = true;
-                Summary = $"{results.Count} résultats pour « {Query} »";
+                Summary = TranslationService.Text("SearchCount", results.Count, query);
             }
             else
             {
-                var media = await db.MediaAsync(Page * 240, 241, SelectedType, SelectedSort, SelectedFolder?.Id, fromDate: from, toDateExclusive: to);
-                HasMore = media.Count > 240;
+                var offset = append ? _cards.Count : 0;
+                var limit = background ? Math.Max(240, _cards.Count) : 240;
+                var type = SelectedType;
+                var sort = SelectedSort;
+                var folder = FolderId;
+                var media = await Task.Run(() => db.MediaAsync(offset, limit + 1, type, sort, folder));
+                if (version != _filterVersion) return;
+                HasMore = media.Count > limit;
                 IsSearch = false;
-                results = media.Take(240).Select(m => new SearchResult(m, 0, null, m.ThumbnailPath)).ToArray();
-                Summary = results.Count == 0 ? "Aucun média pour ces critères. Ajoutez un dossier pour commencer." : $"{results.Count} médias · page {Page + 1}";
+                var page = media.Take(limit).Select(m => new SearchResult(m, 0, null, m.ThumbnailPath));
+                results = append ? _cards.Select(c => c.Result).Concat(page).DistinctBy(r => r.Media.Id).ToArray() : page.ToArray();
+                Summary = results.Count == 0 ? TranslationService.Text("EmptyLibrary") : TranslationService.Text("LoadedMediaCount", results.Count);
             }
 
             UpdateCards(results);
+            _loadedFilterVersion = version;
         }
         catch (Exception e)
         {
@@ -193,8 +233,9 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
         }
         finally
         {
-            if (showLoading)
+            if (!background)
                 IsLoading = false;
+            IsLoadingMore = false;
             _loadGate.Release();
         }
     }
@@ -231,10 +272,11 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
         {
             if (row >= Rows.Count)
             {
-                Rows.Add(new(chunks[row]));
+                Rows.Add(new(chunks[row], _columns));
                 continue;
             }
 
+            Rows[row].Columns = _columns;
             var cards = Rows[row].Cards;
             for (var index = 0; index < chunks[row].Length; index++)
             {
@@ -262,14 +304,23 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
         _suspendFilters = true;
         try
         {
-            var selectedId = SelectedFolder?.Id;
-            var folders = await db.FoldersAsync();
+            var selectedId = SelectedFolder?.Id ?? 0;
+            var folders = await Task.Run(() => db.FoldersAsync());
             if (!Folders.SequenceEqual(folders))
             {
                 Folders.Clear();
                 foreach (var folder in folders)
                     Folders.Add(folder);
-                SelectedFolder = Folders.FirstOrDefault(f => f.Id == selectedId);
+            }
+
+            var allLabel = TranslationService.Text("AllFolders");
+            if (FolderOptions.Count == 0 || FolderOptions[0].DisplayName != allLabel || !FolderOptions.Skip(1).SequenceEqual(folders))
+            {
+                FolderOptions.Clear();
+                FolderOptions.Add(new(0, "", allLabel, true));
+                foreach (var folder in folders)
+                    FolderOptions.Add(folder);
+                SelectedFolder = FolderOptions.FirstOrDefault(f => f.Id == selectedId) ?? FolderOptions[0];
             }
         }
         finally
@@ -277,8 +328,6 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
             _suspendFilters = false;
         }
 
-        if (resetPage)
-            Page = 0;
-        await LoadResultsAsync(IsSearch);
+        await LoadResultsAsync(IsSearch, background: !resetPage);
     }
 }

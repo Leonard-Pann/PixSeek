@@ -6,6 +6,7 @@ namespace PixSeek.ViewModels;
 public partial class MediaCardViewModel(SearchResult result) : ObservableObject
 {
     private SearchResult _result = result;
+    public SearchResult Result => _result;
     public MediaFile Media => _result.Media;
     public string ThumbnailPath => _result.ThumbnailPath;
     public string FileName => Media.FileName;
@@ -39,7 +40,8 @@ public partial class MediaCardViewModel(SearchResult result) : ObservableObject
     }
 }
 
-public sealed class MediaRow(IEnumerable<MediaCardViewModel> cards)
+public partial class MediaRow(IEnumerable<MediaCardViewModel> cards, int columns) : ObservableObject
 {
     public ObservableCollection<MediaCardViewModel> Cards { get; } = new(cards);
+    [ObservableProperty] private int _columns = columns;
 }

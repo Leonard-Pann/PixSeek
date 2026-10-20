@@ -5,9 +5,10 @@ using PixSeek.Core;
 using PixSeek.Infrastructure;
 using PixSeek.Media;
 using PixSeek.Services;
+using PixSeek.Localization;
 
 namespace PixSeek.ViewModels;
-public partial class OptimizerViewModel(MediaCompressionService compression, SettingsStore settings, NativeTools tools) : ObservableObject
+public partial class OptimizerViewModel(MediaCompressionService compression, SettingsStore settings, NativeTools tools, ICompressionCodecPolicy codecPolicy) : ObservableObject
 {
     public Action<string>? Error { get; set; }
     public Action? RequestClose { get; set; }
@@ -27,7 +28,7 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
     [ObservableProperty]
     private double _videoQuality = 67;
     [ObservableProperty]
-    private string _imageCodec = "Auto";
+    private string _imageCodec = "JPEG XL";
     [ObservableProperty]
     private string _videoCodec = "AV1";
     [ObservableProperty]
@@ -37,9 +38,9 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
     [ObservableProperty]
     private bool _keepOnlySmaller = true;
     [ObservableProperty]
-    private string _analysis = "Choisissez les médias à compresser.";
+    private string _analysis = TranslationService.Text("ChooseMedia");
     [ObservableProperty]
-    private string _progressText = "Vos originaux seront conservés.";
+    private string _progressText = TranslationService.Text("OriginalsSafe");
     [ObservableProperty]
     private double _progress;
     [ObservableProperty]
@@ -64,20 +65,19 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
     private int _dialogVersion;
     private bool _customDestination;
     public bool IsFolderInput => _selectedFiles == null;
-    public string Scope => _selectedFiles == null ? "Compresser un dossier" : $"{_selectedFiles.Count} média(s) sélectionné(s)";
+    public string Scope => _selectedFiles == null ? TranslationService.Text("CompressFolder") : TranslationService.Text("SelectedCount", _selectedFiles.Count);
     public string SelectionDetails => _selectedFiles == null ? "" : string.Join(", ", _selectedFiles.Take(3).Select(Path.GetFileName)) + (_selectedFiles.Count > 3 ? "…" : "");
     public bool HasValidationError => !string.IsNullOrEmpty(ValidationError);
     public bool HasResults => !string.IsNullOrEmpty(ResultSummary);
     public bool CanValidate => !IsBusy && !HasResults && !string.IsNullOrWhiteSpace(Destination) && (_selectedFiles?.Count > 0 || Directory.Exists(SourceDirectory));
     public int ResolvedCrf => (int)Math.Round(50 - Math.Clamp(VideoQuality, 0, 100) * .30);
-    public string ImageQualityLabel => Lossless ? "Sans perte de pixels" : $"Qualité {(int)ImageQuality}";
-    public string VideoQualityLabel => $"Qualité {(int)VideoQuality} · CRF {ResolvedCrf}";
+    public string ImageQualityLabel => Lossless ? TranslationService.Text("Lossless") : TranslationService.Text("Quality") + $" {(int)ImageQuality}";
+    public string VideoQualityLabel => TranslationService.Text("Quality") + $" {(int)VideoQuality} · CRF {ResolvedCrf}";
     public string PresetDescription => PresetIndex switch
     {
-        0 => "Privilégie la fidélité visuelle. Fichiers plus volumineux.",
-        2 => "Privilégie l'espace gagné. Une dégradation peut être visible.",
-        _ => "Un compromis entre qualité visuelle, taille et temps de compression."
-    };
+        0 => TranslationService.Text("QualityHint"),
+        2 => TranslationService.Text("MaximumHint"),
+        _ => TranslationService.Text("BalancedDescription")};
     public CompressionOptions CurrentOptions => new()
     {
         Preset = PresetIndex == 2 ? CompressionPreset.Maximum : CompressionPreset.HighQuality,
@@ -107,8 +107,8 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
         ResultSummary = "";
         ValidationError = "";
         Progress = 0;
-        Analysis = "Choisissez les médias à compresser.";
-        ProgressText = "Vos originaux seront conservés.";
+        Analysis = TranslationService.Text("ChooseMedia");
+        ProgressText = TranslationService.Text("OriginalsSafe");
         CanOptimize = false;
         LoadSettings();
         if (files?.Count > 0)
@@ -156,8 +156,8 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
         VideoCodecs.Add("Conserver");
         var options = settings.Current.Compression;
         PresetIndex = options.Preset == CompressionPreset.Maximum ? 2 : options.Crf is < 28 ? 0 : 1;
-        ImageCodec = ImageCodecs.Contains(options.ImageCodec) ? options.ImageCodec : "Auto";
-        VideoCodec = VideoCodecs.Contains(options.VideoCodec) ? options.VideoCodec : VideoCodecs[0];
+        ImageCodec = options.ImageCodec != "Auto" && ImageCodecs.Contains(options.ImageCodec) ? options.ImageCodec : codecPolicy.ImageDefault(tools.Capabilities);
+        VideoCodec = VideoCodecs.Contains(options.VideoCodec) ? options.VideoCodec : codecPolicy.VideoDefault(tools.Capabilities);
         KeepMetadata = options.KeepMetadata;
         KeepOnlySmaller = options.KeepOnlySmaller;
         Recursive = options.Recursive;
@@ -247,7 +247,7 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
             Analysis = $"{analysis.Photos} photos · {analysis.Videos} vidéos · {MediaFormats.Size(analysis.Bytes)}";
             CanOptimize = analysis.Photos + analysis.Videos > 0;
             if (!CanOptimize)
-                ValidationError = "Ce dossier ne contient aucun média pris en charge.";
+                ValidationError = TranslationService.Text("NoMedia");
         }
         catch (OperationCanceledException)
         {
@@ -297,7 +297,7 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
         _control = new();
         try
         {
-            await settings.SaveAsync(settings.Current with { Compression = options });
+            await settings.UpdateAsync(s => s with { Compression = options });
             var report = await compression.RunAsync(source, options, _control, new Progress<WorkProgress>(p =>
             {
                 Progress = p.Fraction * 100;
@@ -305,13 +305,13 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
             }), files, destination);
             foreach (var item in report.Items)
                 Results.Add(item);
-            ResultSummary = $"{MediaFormats.Size(report.OriginalBytes)} → {MediaFormats.Size(report.FinalBytes)}\n{MediaFormats.Size(report.SavedBytes)} économisés · {report.Items.Count(r => r.Status == "Converti")} convertis · {report.Items.Count(r => r.Status is "Ignoré" or "Aucun gain")} ignorés · {report.Items.Count(r => r.Status == "Échec")} échecs";
+            ResultSummary = TranslationService.Text("EncodingSummary", MediaFormats.Size(report.OriginalBytes), MediaFormats.Size(report.FinalBytes), MediaFormats.Size(report.SavedBytes), report.Items.Count(r => r.Status == "Converti"), report.Items.Count(r => r.Status is "Ignoré" or "Aucun gain"), report.Items.Count(r => r.Status == "Échec"));
             Progress = 100;
-            ProgressText = "Compression terminée. Vos originaux ont été conservés.";
+            ProgressText = TranslationService.Text("EncodingFinished");
         }
         catch (OperationCanceledException)
         {
-            ProgressText = "Compression annulée. Vos originaux sont conservés.";
+            ProgressText = TranslationService.Text("EncodingCanceled");
         }
         catch (Exception e)
         {

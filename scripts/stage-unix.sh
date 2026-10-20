@@ -47,3 +47,4 @@ else
   cp -R "$repo/artifacts/im/etc/ImageMagick-7/." "$native/"
   dpkg-query -W > "$native/build-packages.txt"
 fi
+bash "$repo/scripts/stage-vlc-unix.sh" "$rid"

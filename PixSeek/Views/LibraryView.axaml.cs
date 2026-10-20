@@ -6,7 +6,19 @@ using PixSeek.ViewModels;
 namespace PixSeek.Views;
 public partial class LibraryView : UserControl
 {
-    public LibraryView() => InitializeComponent();
+    public LibraryView()
+    {
+        InitializeComponent();
+        AddHandler(ScrollViewer.ScrollChangedEvent, GalleryScrolled);
+    }
+
+    private void GalleryScrolled(object? sender, ScrollChangedEventArgs e)
+    {
+        if (e.Source is ScrollViewer scroll && scroll.Viewport.Height > 0 &&
+            scroll.Extent.Height - scroll.Offset.Y - scroll.Viewport.Height < 600 &&
+            DataContext is LibraryViewModel vm && vm.HasMore)
+            vm.LoadMoreCommand.Execute(null);
+    }
     private void GallerySizeChanged(object? sender, SizeChangedEventArgs e)
     {
         if (DataContext is LibraryViewModel vm)

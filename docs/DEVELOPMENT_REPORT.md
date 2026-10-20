@@ -1,3 +1,5 @@
+> Rapport historique du 19 octobre. La livraison actuelle et ses validations sont décrites dans [la révision 0.2.0 du 20 octobre](UX_UPDATE_2026-10-20.md).
+
 # Rapport de développement — 19 octobre 2026
 
 ## Résultat livré
