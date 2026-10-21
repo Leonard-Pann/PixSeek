@@ -37,7 +37,7 @@ Une publication autonome **avec modèle embarqué**, utilisable hors ligne dès 
 - Visionneuse photo/vidéo dans la même fenêtre : décodage Skia direct, orientation EXIF, cache de trois images, préchargement, zoom sous le curseur, déplacement et flèches clavier. Vidéo LibVLC intégrée avec format original/rotation/SAR, seek, relance après la fin, volume et sourdine, y compris au timestamp de recherche. Fond noir immédiat pendant le chargement.
 - Optimisation d'un dossier ou d'une sélection : JPEG XL, JPEG réversible si vérifié, PNG sans perte de pixels, AVIF perceptuel, AV1/MKV avec copie des pistes audio/sous-titres compatibles.
 - Panneau de compression superposé : entrée pour un dossier ou sélection depuis le clic droit, sortie personnalisable, modes Qualité/Équilibré/Meilleure compression, codecs et curseurs de qualité photo/vidéo dans les paramètres avancés.
-- Progression FFmpeg, pause entre fichiers, annulation, rapport JSON et jobs persistés.
+- Progression FFmpeg, pause entre fichiers, annulation, résultats et jobs persistés dans SQLite.
 - Sorties temporaires, décodage de validation, aucune suppression des sources, aucun écrasement, rejet par défaut des fichiers plus volumineux.
 - Thèmes système/sombre/clair, cinq langues JSON (anglais par défaut, français, italien, allemand, espagnol), sauvegarde automatique, vidage des caches et version. Diagnostics techniques disponibles uniquement via CLI/logs.
 - Réconciliation de bibliothèque au lancement et chaque minute, avec FileSystemWatcher pour réagir rapidement aux créations, modifications et suppressions. Les vecteurs des fichiers supprimés sont retirés.
@@ -126,3 +126,5 @@ Les traductions sont dans les cinq fichiers JSON de PixSeek/Localization. Les no
 LibVLCSharp 3.10.2 et VideoLAN.LibVLC.Windows 3.0.23.1 sont fournis via NuGet. Aucun VLC externe n'est requis sous Windows. Voir docs/UX_UPDATE_2026-10-20.md pour les validations de cette révision.
 
 Correctifs de lecture, de filtres et de performances : [révision 0.2.1](docs/BUGFIXES_0.2.1.md).
+
+Version 0.3.0 : [nouveautés et validation](docs/RELEASE_0.3.0.md), [recherche de personnes et algorithme](docs/PEOPLE.md). Les portraits de référence et les visages reconnus restent locaux. Les rapports de compression restent dans SQLite ; aucun nouveau JSON ne pollue la sortie.

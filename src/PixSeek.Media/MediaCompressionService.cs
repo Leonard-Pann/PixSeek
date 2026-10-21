@@ -144,7 +144,6 @@ public sealed class MediaCompressionService(LibraryDatabase db, ImageMagickServi
             }
 
             var report = new CompressionReport(job, destination, results);
-            await File.WriteAllTextAsync(Path.Combine(destination, $"rapport-{job}.json"), JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }), ct);
             using var finish = c.CreateCommand();
             finish.CommandText = "UPDATE CompressionJob SET Status='Terminé',CompletedAt=CURRENT_TIMESTAMP,OriginalSizeBytes=$o,ResultSizeBytes=$r,SavedBytes=$s WHERE Id=$id";
             finish.Parameters.AddWithValue("$o", report.OriginalBytes);

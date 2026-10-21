@@ -32,6 +32,7 @@ public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeSer
 
     private IReadOnlyList<MediaCardViewModel> _cards = [];
     private int _index, _generation;
+    private long _navigationTimestamp;
     private CancellationTokenSource? _loading;
     private ImagePreviewCache.Lease? _lease;
     private EmbeddedVideoSession? _video;
@@ -41,6 +42,7 @@ public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeSer
     private long _seekStarted;
     public Task PendingLoad { get; private set; } = Task.CompletedTask;
     public int RenderedVideoFrames => _video?.RenderedFrames ?? 0;
+    public string? CurrentPath => _cards.Count == 0 ? null : _cards[_index].Media.FullPath;
 
     public Task OpenAsync(IReadOnlyList<MediaCardViewModel> cards, MediaCardViewModel selected)
     {
@@ -48,6 +50,7 @@ public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeSer
         _index = Array.IndexOf(_cards.ToArray(), selected);
         if (_index < 0) { _cards = [selected]; _index = 0; }
         IsOpen = true;
+        _navigationTimestamp = selected.Timestamp;
         return PendingLoad = LoadAsync();
     }
 
@@ -59,6 +62,7 @@ public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeSer
         _loading = new();
         var ct = _loading.Token;
         var card = _cards[_index];
+        var timestamp = _navigationTimestamp;
         // Clear synchronously, before disposal, probing or decoding: navigation is visibly acknowledged.
         IsLoading = true;
         ErrorMessage = "";
@@ -118,10 +122,12 @@ public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeSer
                     IsPlaying = false;
                 });
                 Duration = Math.Max(1, metadata.DurationMilliseconds);
-                UpdateTime(card.Timestamp);
+                UpdateTime(timestamp);
+                _pendingSeek = timestamp > 0 ? timestamp : null;
+                _seekStarted = Environment.TickCount64;
                 session.Player.Volume = (int)Volume;
                 session.Player.Mute = Muted;
-                await Task.Run(() => session.Play(card.Media.FullPath, card.Timestamp), ct);
+                await Task.Run(() => session.Play(card.Media.FullPath, timestamp), ct);
                 if (generation != _generation) return;
                 IsPlaying = true;
                 _clock.Tick -= Tick;
@@ -182,7 +188,7 @@ public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeSer
     partial void OnPositionChanged(double value)
     {
         OnPropertyChanged(nameof(TimeLabel));
-        if (_updatingTime || _video == null) return;
+        if (_updatingTime || IsLoading || _video == null) return;
         if (_ended) { _seekAfterEnd = true; OnPropertyChanged(nameof(TimeLabel)); return; }
         _pendingSeek = Math.Clamp(value, 0, Duration);
         _seekStarted = Environment.TickCount64;
@@ -243,6 +249,8 @@ public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeSer
     {
         if (_cards.Count == 0) return Task.CompletedTask;
         _index = (_index + step + _cards.Count) % _cards.Count;
+        // Scene offsets apply to the explicitly opened search result, not subsequent navigation.
+        _navigationTimestamp = 0;
         return PendingLoad = LoadAsync();
     }
 

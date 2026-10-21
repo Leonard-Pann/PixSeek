@@ -1,16 +1,38 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.VisualTree;
+using Avalonia.Threading;
 using PixSeek.ViewModels;
 
 namespace PixSeek.Views;
 public partial class LibraryView : UserControl
 {
+    private LibraryViewModel? _subscribed;
     public LibraryView()
     {
         InitializeComponent();
         AddHandler(ScrollViewer.ScrollChangedEvent, GalleryScrolled);
+        DataContextChanged += (_, _) => Subscribe();
+        AttachedToVisualTree += (_, _) => Subscribe();
+        DetachedFromVisualTree += (_, _) => Unsubscribe();
     }
+
+    private void Subscribe()
+    {
+        Unsubscribe();
+        _subscribed = DataContext as LibraryViewModel;
+        if (_subscribed != null) _subscribed.ScrollToTopRequested += ScrollToTop;
+    }
+    private void Unsubscribe()
+    {
+        if (_subscribed != null) _subscribed.ScrollToTopRequested -= ScrollToTop;
+        _subscribed = null;
+    }
+    private void ScrollToTop() => Dispatcher.UIThread.Post(() =>
+    {
+        foreach (var scroll in GalleryList.GetVisualDescendants().OfType<ScrollViewer>()) scroll.Offset = default;
+    }, DispatcherPriority.Loaded);
 
     private void GalleryScrolled(object? sender, ScrollChangedEventArgs e)
     {

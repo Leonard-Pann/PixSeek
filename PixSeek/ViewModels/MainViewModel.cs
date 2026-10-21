@@ -26,6 +26,7 @@ public partial class MainViewModel : ViewModelBase
     public OptimizerViewModel Optimizer { get; }
     public SettingsViewModel Settings { get; }
     public MediaViewerViewModel Viewer { get; }
+    public PeopleViewModel People { get; }
 
     [ObservableProperty]
     private int _pageIndex = 1;
@@ -43,11 +44,15 @@ public partial class MainViewModel : ViewModelBase
     private bool _isIndexProgressIndeterminate;
     [ObservableProperty]
     private bool _isCompressionDialogOpen;
+    [ObservableProperty] private bool _isPersonDialogOpen;
+    public bool IsDialogOpen => IsCompressionDialogOpen || IsPersonDialogOpen;
+    partial void OnIsCompressionDialogOpenChanged(bool value) => OnPropertyChanged(nameof(IsDialogOpen));
+    partial void OnIsPersonDialogOpenChanged(bool value) => OnPropertyChanged(nameof(IsDialogOpen));
     public bool IsGallery => PageIndex != 4;
     public bool IsSettings => PageIndex == 4;
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
 
-    public MainViewModel(LibraryDatabase db, LibraryIndexer indexer, NativeTools tools, ModelManager models, LibraryViewModel library, OptimizerViewModel optimizer, SettingsViewModel settings, MediaViewerViewModel viewer, LibraryMonitor monitor, ILogger<MainViewModel> logger)
+    public MainViewModel(LibraryDatabase db, LibraryIndexer indexer, NativeTools tools, ModelManager models, LibraryViewModel library, OptimizerViewModel optimizer, SettingsViewModel settings, MediaViewerViewModel viewer, LibraryMonitor monitor, ILogger<MainViewModel> logger, PeopleViewModel people)
     {
         _db = db;
         _indexer = indexer;
@@ -59,6 +64,11 @@ public partial class MainViewModel : ViewModelBase
         Optimizer = optimizer;
         Settings = settings;
         Viewer = viewer;
+        People = people;
+        People.Error = ShowError;
+        Library.AddPerson = paths => { IsPersonDialogOpen = true; People.Prepare(paths); };
+        People.RequestClose = () => IsPersonDialogOpen = false;
+        People.IndexUpdated = () => Library.RefreshInBackgroundAsync();
         Library.Error = ShowError;
         Optimizer.Error = ShowError;
         Settings.Error = ShowError;
@@ -144,6 +154,7 @@ public partial class MainViewModel : ViewModelBase
     public async Task InitializeAsync()
     {
         _stopped = false;
+        People.Resume();
         try
         {
             await Task.Run(() => _db.InitializeAsync());
@@ -165,6 +176,7 @@ public partial class MainViewModel : ViewModelBase
             _refreshTimer.Start();
             _monitor.Update(await _db.FoldersAsync());
             await CheckForLibraryChangesAsync();
+            People.QueueIndex();
         }
         catch (Exception e)
         {
@@ -297,6 +309,7 @@ public partial class MainViewModel : ViewModelBase
             await Settings.LoadAsync();
             _monitor.Update(await _db.FoldersAsync());
             IsIndexing = false;
+            People.QueueIndex();
             if (_rescanRequested && !_stopped && !Settings.IsModelBusy)
             {
                 _rescanRequested = false;
@@ -364,6 +377,7 @@ public partial class MainViewModel : ViewModelBase
         Optimizer.Stop();
         Settings.Stop();
         Viewer.Stop();
+        People.Stop();
     }
 
     public async Task ShutdownAsync()
@@ -372,9 +386,12 @@ public partial class MainViewModel : ViewModelBase
         _refreshTimer.Stop();
         Optimizer.Stop();
         Settings.Stop();
+        People.Stop();
         await CancelAndWaitAsync();
         await Viewer.CloseCommand.ExecuteAsync(null);
         await Settings.PendingSave;
+        await People.PendingIndex;
+        await People.PendingReferences;
         if (Optimizer.ValidateCommand.ExecutionTask is { } encoding)
             await encoding;
         if (Settings.ManageModelCommand.ExecutionTask is { } modelDownload)

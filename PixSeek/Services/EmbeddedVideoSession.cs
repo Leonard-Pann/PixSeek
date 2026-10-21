@@ -88,8 +88,7 @@ public sealed class EmbeddedVideoSession : IAsyncDisposable
         {
             if (_disposed) return;
             using var media = new LibVLCSharp.Shared.Media(_lib, path, FromType.FromPath);
-            if (timestamp > 0)
-                media.AddOption(":start-time=" + (timestamp / 1000d).ToString(System.Globalization.CultureInfo.InvariantCulture));
+            media.AddOption(":start-time=" + (Math.Max(0, timestamp) / 1000d).ToString(System.Globalization.CultureInfo.InvariantCulture));
             if (!Player.Play(media))
                 throw new InvalidOperationException("Unable to play this video.");
         }

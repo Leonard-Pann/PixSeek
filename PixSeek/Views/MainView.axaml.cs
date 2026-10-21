@@ -18,6 +18,12 @@ public partial class MainView : UserControl
         DetachedFromVisualTree += (_, _) => Unsubscribe();
         KeyDown += (_, e) =>
         {
+            if (e.Key == Key.Escape && DataContext is MainViewModel { IsPersonDialogOpen: true } personVm)
+            {
+                personVm.People.CancelCommand.Execute(null);
+                e.Handled = true;
+                return;
+            }
             if (e.Key == Key.Escape && DataContext is MainViewModel { IsCompressionDialogOpen: true } vm)
             {
                 vm.Optimizer.CancelCommand.Execute(null);
@@ -50,6 +56,8 @@ public partial class MainView : UserControl
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs args)
     {
+        if (args.PropertyName == nameof(MainViewModel.IsPersonDialogOpen) && _subscribed?.IsPersonDialogOpen == true)
+            Dispatcher.UIThread.Post(() => this.GetVisualDescendants().OfType<PersonDialogView>().FirstOrDefault()?.FindControl<TextBox>("PersonKeywordsInput")?.Focus());
         if (args.PropertyName == nameof(MainViewModel.IsCompressionDialogOpen) && _subscribed?.IsCompressionDialogOpen == true)
             Dispatcher.UIThread.Post(() => this.GetVisualDescendants().OfType<CompressionDialogView>().FirstOrDefault()?.FocusInput());
     }

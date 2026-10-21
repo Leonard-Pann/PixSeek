@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:PixSeek.ViewModels" xmlns:loc="using:PixSeek.Localization" xmlns:controls="using:PixSeek.Controls" x:Class="PixSeek.Views.PersonDialogView" x:DataType="vm:PeopleViewModel">
+  <Grid RowDefinitions="Auto,*,Auto">
+    <Grid ColumnDefinitions="*,Auto" Margin="0,0,0,18"><TextBlock Text="{loc:T AddPerson}" FontSize="25" FontWeight="SemiBold" /><Button Grid.Column="1" Content="✕" Command="{Binding CancelCommand}" ToolTip.Tip="{loc:T Close}" /></Grid>
+    <ScrollViewer Grid.Row="1"><StackPanel Spacing="16" Margin="0,0,8,18">
+      <TextBlock Text="{loc:T PersonExplanation}" TextWrapping="Wrap" Classes="subtitle" />
+      <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding InputSummary}" TextWrapping="Wrap" VerticalAlignment="Center" /><Button Grid.Column="1" Content="{loc:T Browse}" Command="{Binding BrowseCommand}" IsEnabled="{Binding !IsBusy}" /></Grid>
+      <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+      <ProgressBar IsVisible="{Binding IsBusy}" Value="{Binding Progress}" Height="4" />
+      <ItemsControl ItemsSource="{Binding Candidates}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate x:DataType="vm:FaceCandidateViewModel"><Border CornerRadius="12" Padding="10" Margin="4" Background="{DynamicResource SidebarBrush}"><StackPanel Width="130" Spacing="6"><controls:AsyncThumbnail FilePath="{Binding ThumbnailPath}" Width="112" Height="112" Stretch="Uniform" /><CheckBox IsChecked="{Binding IsSelected}" Content="{loc:T ThisPerson}" /><TextBlock Text="{Binding FileName}" TextTrimming="CharacterEllipsis" FontSize="11" /></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+      <TextBlock Text="{loc:T PersonKeywords}" FontWeight="SemiBold" />
+      <TextBox x:Name="PersonKeywordsInput" Text="{Binding Keywords}" PlaceholderText="{loc:T PersonKeywordsHint}" IsEnabled="{Binding !IsBusy}" />
+      <TextBlock Text="{loc:T SavedPeople}" FontWeight="SemiBold" />
+      <ItemsControl ItemsSource="{Binding Profiles}"><ItemsControl.ItemTemplate><DataTemplate x:DataType="vm:PersonOption"><Grid ColumnDefinitions="*,Auto" Margin="0,4"><TextBlock Text="{Binding Label}" VerticalAlignment="Center" /><Button Grid.Column="1" Content="{loc:T Remove}" Click="RemovePerson" /></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+    </StackPanel></ScrollViewer>
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12"><Button Content="{loc:T Cancel}" Command="{Binding CancelCommand}" /><Button x:Name="AddPersonConfirm" Content="{loc:T Add}" Classes="primary" Command="{Binding AddCommand}" IsEnabled="{Binding CanAdd}" /></StackPanel>
+  </Grid>
+</UserControl>

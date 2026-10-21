@@ -26,6 +26,11 @@ public static class AppServices
         s.AddSingleton<ImagePreviewCache>();
         s.AddSingleton<MediaViewerViewModel>();
         s.AddSingleton<LibraryMonitor>();
+        s.AddSingleton<FaceModelManager>();
+        s.AddSingleton<FaceEmbeddingService>();
+        s.AddSingleton<PeopleRepository>();
+        s.AddSingleton<FaceLibraryIndexer>();
+        s.AddSingleton<PeopleViewModel>();
         s.AddSingleton<ModelManager>();
         s.AddSingleton<IExecutionProviderFactory, CpuExecutionProviderFactory>();
         s.AddSingleton<OnnxEmbeddingService>();

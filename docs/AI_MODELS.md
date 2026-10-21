@@ -64,3 +64,7 @@ Image : RGB float32 NCHW [1,3,224,224], resize squash bicubique (pas de crop), m
 L'inférence réelle et trois recherches françaises ont été exécutées. Le test bascule ensuite vers XLM-R (512D) et reconstruit l'index. Ce test est une validation fonctionnelle sur un petit corpus, pas un classement comparatif de qualité.
 
 Installation : Settings → AI model, Download à côté de SigLIP2. Pour les tests : pwsh -File scripts/install-model.ps1 -Model siglip2. Les fichiers alternatifs sont stockés sous models/siglip2 dans les données utilisateur. XLM-R/ViT-B32 reste le choix initial et est préinstallé dans la publication Windows ; SigLIP2 reste optionnel.
+
+## Modèles faciaux 0.3.0
+
+YuNet 2023mar + SFace 2021dec, fichiers OpenCV Zoo épinglés et vérifiés dans tools/models/faces.json. Ces modèles sont indépendants du couple multimodal actif. SFace produit 128 dimensions normalisées après alignement sur cinq points. Voir [PEOPLE](PEOPLE.md) pour les paramètres exacts, l'installation, le classement et les limites.

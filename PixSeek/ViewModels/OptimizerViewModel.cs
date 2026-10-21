@@ -8,7 +8,7 @@ using PixSeek.Services;
 using PixSeek.Localization;
 
 namespace PixSeek.ViewModels;
-public partial class OptimizerViewModel(MediaCompressionService compression, SettingsStore settings, NativeTools tools, ICompressionCodecPolicy codecPolicy) : ObservableObject
+public partial class OptimizerViewModel(MediaCompressionService compression, SettingsStore settings, NativeTools tools, ICompressionCodecPolicy codecPolicy, LibraryDatabase db) : ObservableObject
 {
     public Action<string>? Error { get; set; }
     public Action? RequestClose { get; set; }
@@ -58,6 +58,13 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
     public ObservableCollection<EncodingResult> Results { get; } = [];
     public ObservableCollection<string> ImageCodecs { get; } = [];
     public ObservableCollection<string> VideoCodecs { get; } = [];
+    public ObservableCollection<LibraryFolder> LibraryFolders { get; } = [];
+    [ObservableProperty] private LibraryFolder? _inputLibraryFolder;
+    public Task PendingFolders { get; private set; } = Task.CompletedTask;
+    partial void OnInputLibraryFolderChanged(LibraryFolder? value)
+    {
+        if (value != null) SourceDirectory = value.Path;
+    }
 
     private IReadOnlyList<string>? _selectedFiles;
     private JobControl? _control;
@@ -111,9 +118,26 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
         ProgressText = TranslationService.Text("OriginalsSafe");
         CanOptimize = false;
         LoadSettings();
+        ImageCodec = codecPolicy.ImageDefault(tools.Capabilities);
+        VideoCodec = codecPolicy.VideoDefault(tools.Capabilities);
+        OnPropertyChanged(nameof(ImageCodec));
+        OnPropertyChanged(nameof(VideoCodec));
+        InputLibraryFolder = null;
+        PendingFolders = LoadFoldersAsync();
         if (files?.Count > 0)
             SelectFiles(files);
         NotifyScope();
+    }
+
+    private async Task LoadFoldersAsync()
+    {
+        try
+        {
+            var folders = await Task.Run(() => db.FoldersAsync());
+            LibraryFolders.Clear();
+            foreach (var folder in folders) LibraryFolders.Add(folder);
+        }
+        catch (Exception e) { Error?.Invoke(e.Message); }
     }
 
     public void SelectFiles(IReadOnlyList<string> files)
@@ -143,21 +167,20 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
 
     public void LoadSettings()
     {
-        ImageCodecs.Clear();
-        ImageCodecs.Add("Auto");
-        if (tools.Capabilities?.Jxl == true)
-            ImageCodecs.Add("JPEG XL");
-        if (tools.Capabilities?.Avif == true)
-            ImageCodecs.Add("AVIF");
-        ImageCodecs.Add("Conserver");
-        VideoCodecs.Clear();
-        if (tools.Capabilities?.Av1Encoder != null)
-            VideoCodecs.Add("AV1");
-        VideoCodecs.Add("Conserver");
         var options = settings.Current.Compression;
+        var imageChoices = new List<string> { "Auto" };
+        if (tools.Capabilities?.Jxl == true) imageChoices.Add("JPEG XL");
+        if (tools.Capabilities?.Avif == true) imageChoices.Add("AVIF");
+        imageChoices.Add("Conserver");
+        var videoChoices = new List<string>();
+        if (tools.Capabilities?.Av1Encoder != null) videoChoices.Add("AV1");
+        videoChoices.Add("Conserver");
+        // Do not clear a bound ItemsSource: ComboBox can push null into SelectedItem during rebuild.
+        SynchronizeChoices(ImageCodecs, imageChoices);
+        SynchronizeChoices(VideoCodecs, videoChoices);
+        ImageCodec = options.ImageCodec is not (null or "Auto") && imageChoices.Contains(options.ImageCodec) ? options.ImageCodec : codecPolicy.ImageDefault(tools.Capabilities);
+        VideoCodec = options.VideoCodec != null && videoChoices.Contains(options.VideoCodec) ? options.VideoCodec : codecPolicy.VideoDefault(tools.Capabilities);
         PresetIndex = options.Preset == CompressionPreset.Maximum ? 2 : options.Crf is < 28 ? 0 : 1;
-        ImageCodec = options.ImageCodec != "Auto" && ImageCodecs.Contains(options.ImageCodec) ? options.ImageCodec : codecPolicy.ImageDefault(tools.Capabilities);
-        VideoCodec = VideoCodecs.Contains(options.VideoCodec) ? options.VideoCodec : codecPolicy.VideoDefault(tools.Capabilities);
         KeepMetadata = options.KeepMetadata;
         KeepOnlySmaller = options.KeepOnlySmaller;
         Recursive = options.Recursive;
@@ -167,8 +190,17 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
         Lossless = false;
     }
 
+    private static void SynchronizeChoices(ObservableCollection<string> collection, List<string> desired)
+    {
+        if (collection.SequenceEqual(desired)) return;
+        foreach (var value in desired.Where(v => !collection.Contains(v))) collection.Add(value);
+        foreach (var value in collection.Where(v => !desired.Contains(v)).ToArray()) collection.Remove(value);
+    }
+
+
     partial void OnSourceDirectoryChanged(string value)
     {
+        if (InputLibraryFolder != null && InputLibraryFolder.Path != value) InputLibraryFolder = null;
         _selectedFiles = null;
         CanOptimize = false;
         if (!_customDestination || string.IsNullOrEmpty(Destination))

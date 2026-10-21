@@ -70,6 +70,7 @@ public sealed class JobTests(TestEnvironment e) : IClassFixture<TestEnvironment>
         Assert.Equal(source, result.SourcePath);
         Assert.StartsWith(destination + Path.DirectorySeparatorChar, result.DestinationPath);
         Assert.True(File.Exists(result.DestinationPath));
+        Assert.Empty(Directory.GetFiles(destination, "*.json"));
         Assert.Equal(original, await File.ReadAllBytesAsync(source));
         Assert.Equal(original, await File.ReadAllBytesAsync(other));
         // Previous custom exports are excluded even when the folder is analyzed again.

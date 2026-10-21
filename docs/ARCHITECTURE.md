@@ -68,3 +68,9 @@ EmbeddedVideoSession utilise les callbacks RV32 de LibVLC et une WriteableBitmap
 TranslationService charge un JSON par langue ; l'extension XAML T lie les textes au changement de langue. Les identifiants des choix restent stables. Les paramètres sont écrits atomiquement après 250 ms, sans perdre les préférences de compression ; la fermeture attend la sauvegarde en attente.
 
 Depuis 0.2.1, les filtres sont poussés dans vec0 par rowid IN (sous-requête MediaEmbedding/MediaFile), avant MATCH/k. ICompressionCodecPolicy centralise les codecs de défaut. FFprobe détermine la taille d'affichage vidéo avec rotation et SAR ; EndReached gère une position finale stable et la recréation du média lors du replay.
+
+## Personnes et interactions 0.3.0
+
+FaceEmbeddingService exécute YuNet/SFace dans des sessions ONNX séparées. PeopleRepository crée les tables Person, PersonAlias, PersonReference, FaceScan, FaceObservation et FaceVector (vec0 128D). FaceLibraryIndexer réutilise les signatures et analyse les photos en arrière-plan. PeopleViewModel pilote le panneau de références et le worker ; LibraryViewModel préfixe les résultats hybrides avec les correspondances faciales des alias présents dans la requête. La fermeture attend les tâches de références/indexation avant de libérer les sessions. Les détails mathématiques et licences sont dans PEOPLE.md.
+
+MediaClipboard expose un fichier original et, pour une photo, un bitmap détaché du cache. Le transfert implémente IDataTransfer/IAsyncDataTransfer et possède la durée de vie du bitmap. Les flèches couvrent les deux lignes de la visionneuse ; le timestamp initial est séparé de la navigation. Le retour en haut est un événement de vue explicite, indépendant du rafraîchissement de fond.

@@ -6,6 +6,7 @@ rid="${1:-osx-arm64}"
 [[ -x "$repo/runtimes/$rid/native/ffmpeg" && -f "$repo/runtimes/$rid/native/vec0.dylib" ]] || { echo "Exécuter scripts/stage-unix.sh $rid sur le Mac de même architecture." >&2; exit 1; }
 output="$repo/artifacts/publish/$rid"
 dotnet publish "$repo/PixSeek.Desktop/PixSeek.Desktop.csproj" -c Release -r "$rid" --self-contained true -p:PublishSingleFile=false -p:PublishTrimmed=false -o "$output"
+bash "$repo/scripts/install-face-models.sh" "$output/models/faces"
 bash "$repo/scripts/wrap-unix-player.sh" "$output" "$rid"
 app="$output/PixSeek.app"
 mkdir -p "$app/Contents/MacOS"

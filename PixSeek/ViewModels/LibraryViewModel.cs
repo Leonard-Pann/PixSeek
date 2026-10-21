@@ -7,7 +7,7 @@ using PixSeek.Infrastructure;
 using PixSeek.Localization;
 
 namespace PixSeek.ViewModels;
-public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService embeddings, ModelManager models) : ObservableObject
+public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService embeddings, ModelManager models, PeopleRepository people, FaceModelManager faceModels) : ObservableObject
 {
     public ObservableCollection<MediaRow> Rows { get; } = [];
     public ObservableCollection<LibraryFolder> Folders { get; } = [];
@@ -66,7 +66,11 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     public Action<string>? Error { get; set; }
     public Action<IReadOnlyList<string>>? OptimizeFiles { get; set; }
     public Action? OpenSettings { get; set; }
+    public Action<IReadOnlyList<string>>? AddPerson { get; set; }
+    [RelayCommand] private void Person() => AddPerson?.Invoke(_cards.Where(c => c.IsSelected && !c.IsVideo).Select(c => c.Media.FullPath).ToArray());
     public Func<Task>? AddFolder { get; set; }
+    public event Action? ScrollToTopRequested;
+    public bool HasQuery => !string.IsNullOrEmpty(Query);
     public Task PendingFilterRefresh { get; private set; } = Task.CompletedTask;
 
     [RelayCommand]
@@ -97,6 +101,19 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
             return;
         ++_filterVersion;
         await LoadResultsAsync(!string.IsNullOrWhiteSpace(Query));
+        ScrollToTopRequested?.Invoke();
+    }
+
+    [RelayCommand]
+    private async Task ClearQueryAsync()
+    {
+        _suspendFilters = true;
+        Query = "";
+        IsSearch = false;
+        _suspendFilters = false;
+        ++_filterVersion;
+        await LoadResultsAsync(false);
+        ScrollToTopRequested?.Invoke();
     }
 
     [RelayCommand]
@@ -133,6 +150,7 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     partial void OnSelectedFolderChanged(LibraryFolder? value) => ScheduleFilterRefresh();
     partial void OnQueryChanged(string value)
     {
+        OnPropertyChanged(nameof(HasQuery));
         if (string.IsNullOrWhiteSpace(value) && IsSearch)
         {
             IsSearch = false;
@@ -202,7 +220,10 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
                     nearest = await Task.Run(() => db.SearchFilteredAsync(_queryVector, 240, type, folder));
                 }
 
-                results = HybridRanking.Merge(query, nearest, await namesTask, 240);
+                var hybrid = HybridRanking.Merge(query, nearest, await namesTask, 240);
+                var personMatches = await Task.Run(() => people.SearchAsync(query, type, folder, faceModels.Version, FaceEmbeddingService.MatchThreshold));
+                results = personMatches.Select(p => new SearchResult(p.Media, p.Similarity, null, p.Media.ThumbnailPath))
+                    .Concat(hybrid).DistinctBy(p => p.Media.Id).Take(240).ToArray();
                 if (version != _filterVersion) return;
                 HasMore = false;
                 IsSearch = true;

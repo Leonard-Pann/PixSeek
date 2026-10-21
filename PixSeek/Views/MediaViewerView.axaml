@@ -1,11 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:vm="using:PixSeek.ViewModels" xmlns:controls="using:PixSeek.Controls" xmlns:loc="using:PixSeek.Localization" x:Class="PixSeek.Views.MediaViewerView" x:DataType="vm:MediaViewerViewModel" Background="#101115" Focusable="True">
+  <UserControl.ContextMenu><ContextMenu><MenuItem Header="{loc:T CopyMedia}" Click="CopyMedia" /></ContextMenu></UserControl.ContextMenu>
   <Grid RowDefinitions="*,Auto" ClipToBounds="True">
     <controls:ZoomImage x:Name="PhotoSurface" Bitmap="{Binding Image}" IsVisible="{Binding !IsVideo}" />
     <Image x:Name="VideoSurface" Source="{Binding Image}" IsVisible="{Binding IsVideo}" Stretch="Uniform" />
     <Border x:Name="LoadingSurface" Background="Black" IsVisible="{Binding IsLoading}" />
     <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoading}" Height="3" VerticalAlignment="Top" />
-    <Button Content="‹" Command="{Binding PreviousCommand}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="16" FontSize="34" Background="#80101014" Foreground="White" Padding="12,0" />
-    <Button Content="›" Command="{Binding NextCommand}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16" FontSize="34" Background="#80101014" Foreground="White" Padding="12,0" />
+    <Button Grid.RowSpan="2" x:Name="PreviousMediaButton" Content="‹" Command="{Binding PreviousCommand}" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="16" FontSize="34" Background="#80101014" Foreground="White" Padding="12,0" />
+    <Button Grid.RowSpan="2" x:Name="NextMediaButton" Content="›" Command="{Binding NextCommand}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16" FontSize="34" Background="#80101014" Foreground="White" Padding="12,0" />
     <Button Content="✕" Command="{Binding CloseCommand}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="18" Background="#80101014" Foreground="White" Padding="12,8" ToolTip.Tip="{loc:T Close}" />
     <TextBlock Text="{Binding ErrorMessage}" IsVisible="{Binding HasError}" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="700" />
     <Border Grid.Row="1" IsVisible="{Binding IsVideo}" Background="#E0191A20" Padding="22,12"><Grid ColumnDefinitions="Auto,*,Auto,Auto,140" ColumnSpacing="16">

@@ -1,11 +1,18 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
+using Avalonia.Interactivity;
 using PixSeek.ViewModels;
 
 namespace PixSeek.Views;
 public partial class MediaViewerView : UserControl
 {
+    private async void CopyMedia(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MediaViewerViewModel vm || vm.CurrentPath is not { } path || TopLevel.GetTopLevel(this) is not { } top) return;
+        try { await Services.MediaClipboard.CopyAsync(top, path, vm.Image, vm.IsVideo); }
+        catch (Exception error) { vm.ErrorMessage = error.Message; }
+    }
     private MediaViewerViewModel? _vm;
     public MediaViewerView()
     {

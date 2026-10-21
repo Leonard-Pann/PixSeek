@@ -23,7 +23,7 @@
 
 ## Non implémenté
 
-- Accélération GPU, index ANN, génération de tags, reconnaissance de personnes, groupes chronologiques EXIF, recherche par doublons.
+- Accélération GPU, index ANN, génération automatique de tags, reconnaissance de personnes dans les vidéos, groupes chronologiques EXIF, recherche par doublons.
 - Conversion HDR garantie, images animées/multipages, option vidéo MP4, adaptation audio Opus/AAC, redimensionnement/framerate avancés et encodages parallèles configurables : les chemins non validés ne sont pas proposés.
 - Suppression/remplacement automatique d'originaux, installateur, mises à jour automatiques, signature/notarisation commerciale.
 - Android/iOS/Browser, ARM64 desktop, tests/macOS/Linux exécutés et distribution publique juridiquement finalisée.
@@ -45,3 +45,5 @@ Les aperçus photo sont bornés à 4 096 pixels et trois bitmaps en cache. Les c
 Le modèle actif ne se supprime pas pendant son utilisation ; sélectionner d'abord l'autre modèle installé. Une installation dans un répertoire protégé peut également empêcher la suppression des poids embarqués et produit alors une erreur explicite.
 
 Les nouvelles dépendances VLC Unix nécessitent le SDK/plugins sur le runner de build, puis scripts/stage-vlc-unix.sh. Les scripts ont une stratégie de regroupement et des lanceurs relatifs, mais leur exécution et la fermeture des bibliothèques natives sur Mac/Linux restent non validées ici. Certaines erreurs techniques des outils natifs restent dans leur langue d'origine ; les textes courants de l'interface utilisent les JSON.
+
+Depuis 0.3.0, les personnes dans les photos peuvent être retrouvées avec YuNet/SFace et des références choisies par l'utilisateur. Le corpus de validation est petit, le seuil conservateur et les erreurs restent possibles. Voir PEOPLE.md. Le collage dans Teams/Discord n'a pas été automatisé ; les formats image/fichier sont testés via le presse-papier Avalonia.
