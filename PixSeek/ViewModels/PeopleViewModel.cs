@@ -112,6 +112,7 @@ public partial class PeopleViewModel(PeopleRepository people, FaceModelManager m
             await Task.Run(() => people.AddAsync(keywords, references, models.Version, ct));
             await RefreshProfilesAsync();
             if (generation == _referenceGeneration) RequestClose?.Invoke();
+            if (IndexUpdated != null) await IndexUpdated();
             QueueIndex();
         }
         catch (OperationCanceledException) { }
@@ -124,8 +125,6 @@ public partial class PeopleViewModel(PeopleRepository people, FaceModelManager m
         if (option == null || IsBusy) return;
         try
         {
-            _index?.Cancel();
-            await PendingIndex;
             await Task.Run(() => people.DeleteAsync(option.Id));
             await RefreshProfilesAsync();
             if (IndexUpdated != null) await IndexUpdated();
@@ -155,7 +154,7 @@ public partial class PeopleViewModel(PeopleRepository people, FaceModelManager m
             do
             {
                 _rerun = false;
-                if ((await Task.Run(() => people.ProfilesAsync())).Count == 0 || _stopped) return;
+                if (_stopped) return;
                 _index?.Dispose(); _index = new();
                 IsIndexing = true;
                 IndexStatus = TranslationService.Text("IndexingFaces");

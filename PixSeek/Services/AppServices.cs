@@ -24,6 +24,8 @@ public static class AppServices
         s.AddSingleton<FfmpegService>();
         s.AddSingleton<ThumbnailService>();
         s.AddSingleton<ImagePreviewCache>();
+        s.AddSingleton<IImagePreviewDecoder, ImagePreviewDecoder>();
+        s.AddSingleton<VideoRuntime>();
         s.AddSingleton<MediaViewerViewModel>();
         s.AddSingleton<LibraryMonitor>();
         s.AddSingleton<FaceModelManager>();

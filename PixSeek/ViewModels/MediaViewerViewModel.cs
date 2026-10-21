@@ -7,7 +7,7 @@ using PixSeek.Services;
 
 namespace PixSeek.ViewModels;
 
-public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeService probe) : ObservableObject
+public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeService probe, VideoRuntime runtime) : ObservableObject
 {
     [ObservableProperty] private bool _isOpen;
     [ObservableProperty] private bool _isVideo;
@@ -40,6 +40,8 @@ public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeSer
     private bool _updatingTime, _ended, _seekAfterEnd;
     private double? _pendingSeek;
     private long _seekStarted;
+    private readonly Dictionary<string, (int Width, int Height, long Duration)> _videoMetadata = [];
+    public int VideoProbeCount { get; private set; }
     public Task PendingLoad { get; private set; } = Task.CompletedTask;
     public int RenderedVideoFrames => _video?.RenderedFrames ?? 0;
     public string? CurrentPath => _cards.Count == 0 ? null : _cards[_index].Media.FullPath;
@@ -78,18 +80,17 @@ public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeSer
         IsVideo = card.IsVideo;
         Duration = 1;
         UpdateTime(0);
+        var retiring = previous?.DisposeAsync().AsTask() ?? Task.CompletedTask;
         try
         {
             // Always let Avalonia paint the black loading surface, including warm-cache navigation.
             await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
-            if (previous != null) await previous.DisposeAsync();
             previousLease?.Dispose();
             if (generation != _generation) return;
             if (card.IsVideo)
             {
-                var metadata = await Task.Run(() => probe.ProbeAsync(card.Media.FullPath, ct), ct);
-                var size = FfprobeService.DisplaySize(metadata);
-                var session = await Task.Run(() => new EmbeddedVideoSession(size.Width, size.Height), ct);
+                var metadata = await VideoMetadataAsync(card, ct);
+                var session = await runtime.CreateSessionAsync(metadata.Width, metadata.Height, ct);
                 if (generation != _generation || ct.IsCancellationRequested)
                 {
                     await session.DisposeAsync();
@@ -121,7 +122,7 @@ public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeSer
                     IsLoading = false;
                     IsPlaying = false;
                 });
-                Duration = Math.Max(1, metadata.DurationMilliseconds);
+                Duration = Math.Max(1, metadata.Duration);
                 UpdateTime(timestamp);
                 _pendingSeek = timestamp > 0 ? timestamp : null;
                 _seekStarted = Environment.TickCount64;
@@ -153,13 +154,38 @@ public partial class MediaViewerViewModel(ImagePreviewCache previews, FfprobeSer
         {
             if (generation == _generation) { ErrorMessage = e.Message; IsLoading = false; }
         }
+        finally { await retiring; }
     }
 
-    private async Task PrefetchAsync(string path, CancellationToken ct)
+    private async Task<(int Width, int Height, long Duration)> VideoMetadataAsync(MediaCardViewModel card, CancellationToken ct)
     {
-        try { using var lease = await previews.LoadAsync(path, ct); }
-        catch (Exception) { }
+        var file = await Task.Run(() =>
+        {
+            var info = new FileInfo(card.Media.FullPath);
+            return (info.Length, info.LastWriteTimeUtc);
+        }, ct);
+        var key = card.Media.FullPath + "|" + file.Length + "|" + file.LastWriteTimeUtc.Ticks;
+        if (_videoMetadata.TryGetValue(key, out var cached)) return cached;
+        var media = card.Media;
+        (int Width, int Height, long Duration) result;
+        if (media.SizeBytes == file.Length && media.LastModifiedAt == file.LastWriteTimeUtc && media.VideoDisplayWidth > 0 && media.VideoDisplayHeight > 0)
+            result = (media.VideoDisplayWidth, media.VideoDisplayHeight, media.DurationMilliseconds);
+        else
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(10));
+            PixSeek.Core.MediaMetadata metadata;
+            try { metadata = await Task.Run(() => probe.ProbeAsync(media.FullPath, timeout.Token), timeout.Token); }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested) { throw new TimeoutException("Video metadata took too long to load."); }
+            VideoProbeCount++;
+            var size = FfprobeService.DisplaySize(metadata);
+            result = (size.Width, size.Height, metadata.DurationMilliseconds);
+        }
+        if (_videoMetadata.Count >= 128) _videoMetadata.Remove(_videoMetadata.Keys.First());
+        return _videoMetadata[key] = result;
     }
+
+    private Task PrefetchAsync(string path, CancellationToken ct) => previews.PrefetchAsync(path, ct);
 
     private void UpdateTime(double value)
     {

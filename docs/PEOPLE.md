@@ -1,4 +1,4 @@
-# Personnes — PixSeek 0.3.0
+# Personnes — PixSeek 0.3.1
 
 ## Utilisation
 
@@ -6,7 +6,7 @@ Sélectionner quelques photos dans la photothèque puis cliquer sur **Ajouter un
 
 Une photo avec un seul visage le sélectionne initialement. Pour une photo de groupe, aucun visage n'est sélectionné automatiquement : choisir celui de la personne concernée. Un seul visage peut être coché par photo. Les références doivent représenter la même personne.
 
-Entrer un ou plusieurs mots-clés séparés par des virgules, points-virgules ou retours à la ligne, par exemple **Camille, Maman**, puis Ajouter. Les références sont conservées et l'analyse de la photothèque continue en arrière-plan. Rechercher ensuite **Maman** ou **Camille à la plage**. Les photos dont le visage correspond aux références sont placées avant les autres résultats ; le classement hybride existant est conservé pour les autres médias.
+Entrer un ou plusieurs mots-clés séparés par des virgules, points-virgules ou retours à la ligne, par exemple **Camille, Maman**, puis Ajouter. Les références sont conservées ; les visages déjà analysés à l'import sont immédiatement réutilisés. Rechercher ensuite **Maman** ou **Camille à la plage**. Les photos dont le visage correspond aux références sont placées avant les autres résultats ; le classement hybride existant est conservé pour les autres médias.
 
 Un mot-clé déjà enregistré ajoute les nouvelles références à la même personne. Les mots-clés doivent distinguer les personnes ; deux profils différents ne peuvent pas partager un même alias. Les profils sont retirables depuis le même panneau.
 
@@ -40,12 +40,20 @@ Ce seuil est un choix prudent de prototype, pas une probabilité ni une preuve d
 
 ## Stockage, reprise et limites
 
-Les personnes, alias, vecteurs de référence et observations des visages sont dans `pixseek.db`, dans les données utilisateur (`%LOCALAPPDATA%/PixSeek` sous Windows). Les modèles seuls sont dans `<exécutable>/models/faces`. Les photos sources restent référencées et ne sont pas modifiées. Les visages alignés de prévisualisation sont dans le cache ; Paramètres permet de vider ce cache. Retirer une personne supprime ses alias et ses références vectorielles. Retirer le dernier profil supprime aussi l'index facial dérivé ; les vignettes résiduelles restent nettoyables par le bouton de cache.
+Les personnes, alias, vecteurs de référence et observations des visages sont dans `pixseek.db`, dans les données utilisateur (`%LOCALAPPDATA%/PixSeek` sous Windows). Les modèles seuls sont dans `<exécutable>/models/faces`. Les photos sources restent référencées et ne sont pas modifiées. Les visages alignés de prévisualisation sont dans le cache ; Paramètres permet de vider ce cache. Retirer une personne supprime ses alias et ses références vectorielles. L'index facial de la bibliothèque est conservé même sans profil, afin de pouvoir créer une nouvelle personne sans recalculer toutes les photos. Retirer un dossier supprime ses observations ; les vecteurs orphelins sont nettoyés à la réconciliation suivante. Les vignettes résiduelles restent nettoyables par le bouton de cache.
 
-L'indexation faciale dispose de son propre worker et de sessions CPU limitées à deux threads internes. Elle peut fonctionner en parallèle avec la galerie et l'indexation sémantique. Les mêmes signatures sont réutilisées au redémarrage et lors des réconciliations automatiques. Les fichiers modifiés sont réanalysés et les fichiers absents sont exclus des recherches.
+L'indexation faciale démarre dès l'import, avant même la création d'une personne. Les nouvelles photos prêtes sont signalées par LibraryIndexer et un signal groupé déclenche son worker pendant que les miniatures et l'indexation sémantique continuent. Au lancement, les anciennes photos sans signature faciale sont aussi rattrapées. L'indexation faciale dispose de son propre worker et de sessions CPU limitées à deux threads internes. Elle peut fonctionner en parallèle avec la galerie et l'indexation sémantique. Les mêmes signatures sont réutilisées au redémarrage et lors des réconciliations automatiques. Les fichiers modifiés sont réanalysés et les fichiers absents sont exclus des recherches.
 
-Cette révision traite **les photos**, pas encore les visages des frames vidéo. Les petits visages, profils, occlusions, flous, jumeaux, changements d'âge et d'éclairage peuvent produire des erreurs ou des absences. La réduction à 640 pixels peut manquer de petits visages dans une grande photo de groupe. Aucun taux de reconnaissance général n'est revendiqué. Le classement reste limité à 240 médias et au voisinage borné de 1 920 visages par référence.
+Cette révision traite **les photos**, pas encore les visages des frames vidéo. Les petits visages, profils, occlusions, flous, jumeaux, changements d'âge et d'éclairage peuvent produire des erreurs ou des absences. La réduction à 640 pixels peut manquer de petits visages dans une grande photo de groupe. Aucun taux de reconnaissance général n'est revendiqué. La recherche par mot-clé reste limitée à 240 médias et au voisinage borné de 1 920 visages par référence. Le filtre de personnes de la photothèque parcourt toutes les correspondances, avec pagination, sans limite de 240 photos.
 
 Les tests réels utilisent deux portraits NASA du domaine public : Eileen Collins et Neil Armstrong, des variantes redimensionnées/assombries et une image de groupe générée avec les deux portraits. Ils vérifient détection, normalisation, ressemblance de la même personne, distinction des deux personnes, choix explicite dans un groupe, persistance, filtrage par dossier, priorité dans la recherche et suppression. Ce petit corpus n'est pas une évaluation sur une population représentative.
 
 Les licences citées sont celles publiées dans les dossiers officiels des modèles. La provenance des données d'entraînement SFace fait l'objet de questions en amont ([discussion OpenCV](https://github.com/opencv/opencv_zoo/issues/313)) ; ce prototype ne prétend pas résoudre cette question pour une distribution commerciale future.
+
+## Filtrer et sélectionner
+
+Le menu Toutes les personnes, à droite du tri, contient les profils et leurs alias. Il se combine aux filtres type/dossier et à la recherche hybride. Revenir à Toutes les personnes ou effacer les filtres annule ce critère. Cette version reconnaît les personnes dans les photos uniquement.
+
+Le prédicat SQL compare les références du profil à chaque visage valide (taille/date/version) avec la [fonction officielle vec_distance_cosine](https://github.com/asg017/sqlite-vec/blob/v0.1.6/site/api-reference.md). Il s'applique avant la pagination, avant le top K sémantique et avant la présélection par nom de fichier. Il ne se limite pas aux photos chargées dans la grille.
+
+Tout sélectionner couvre l'ensemble de la photothèque filtrée, y compris les pages non affichées, sans charger les originaux ni leurs miniatures. Dans une recherche, il couvre les résultats renvoyés (au plus 240). Tout désélectionner vide également la sélection hors écran.

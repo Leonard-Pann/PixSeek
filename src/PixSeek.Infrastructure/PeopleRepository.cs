@@ -118,12 +118,6 @@ public sealed class PeopleRepository(LibraryDatabase db)
             await using var c = await db.OpenAsync(ct);
             using var command = c.CreateCommand(); command.CommandText = "DELETE FROM Person WHERE Id=$id";
             command.Parameters.AddWithValue("$id", personId); await command.ExecuteNonQueryAsync(ct);
-            // Once the last person is removed, remove the derived biometric library index as well.
-            await LibraryDatabase.ExecuteAsync(c, """
-                DELETE FROM FaceVector WHERE NOT EXISTS(SELECT 1 FROM Person);
-                DELETE FROM FaceObservation WHERE NOT EXISTS(SELECT 1 FROM Person);
-                DELETE FROM FaceScan WHERE NOT EXISTS(SELECT 1 FROM Person);
-                """, ct);
         }
         finally { _write.Release(); }
     }
@@ -155,7 +149,7 @@ public sealed class PeopleRepository(LibraryDatabase db)
             await using var c = await db.OpenAsync(ct);
             using var tx = c.BeginTransaction();
             using var exists = c.CreateCommand(); exists.Transaction = tx;
-            exists.CommandText = "SELECT EXISTS(SELECT 1 FROM MediaFile WHERE Id=$id) AND EXISTS(SELECT 1 FROM Person)";
+            exists.CommandText = "SELECT EXISTS(SELECT 1 FROM MediaFile WHERE Id=$id)";
             exists.Parameters.AddWithValue("$id", media.Id);
             if (Convert.ToInt64(await exists.ExecuteScalarAsync(ct)) == 0) return;
             using var clear = c.CreateCommand(); clear.Transaction = tx;
@@ -183,7 +177,28 @@ public sealed class PeopleRepository(LibraryDatabase db)
         finally { _write.Release(); }
     }
 
-    public async Task<IReadOnlyList<PersonSearchMatch>> SearchAsync(string query, string type, long? folder, string version, double threshold, CancellationToken ct = default)
+    // Correlated against the outer MediaFile alias. Unlike top-K face search this covers every
+    // matching photo, so pagination, select-all and semantic pre-filtering share the same scope.
+    internal static string FilterSql(long? personId) => personId.HasValue ? """
+        AND EXISTS (
+            SELECT 1 FROM FaceObservation face
+            JOIN FaceVector fv ON fv.rowid=face.Id
+            JOIN PersonReference reference ON reference.PersonId=$person AND reference.ModelVersion=face.ModelVersion
+            WHERE face.MediaFileId=m.Id AND face.ModelVersion=$faceVersion
+            AND face.SizeBytes=m.SizeBytes AND face.ModifiedAt=m.LastModifiedAt
+            AND vec_distance_cosine(fv.embedding,reference.Vector)<=$faceDistance
+        )
+        """ : "";
+
+    internal static void BindFilter(SqliteCommand command, long? personId, string? version, double threshold)
+    {
+        if (!personId.HasValue) return;
+        command.Parameters.AddWithValue("$person", personId.Value);
+        command.Parameters.AddWithValue("$faceVersion", version ?? "");
+        command.Parameters.AddWithValue("$faceDistance", 1 - threshold);
+    }
+
+    public async Task<IReadOnlyList<PersonSearchMatch>> SearchAsync(string query, string type, long? folder, string version, double threshold, CancellationToken ct = default, long? personId = null)
     {
         await InitializeAsync(ct);
         if (type == "Vidéos") return [];
@@ -203,7 +218,7 @@ public sealed class PeopleRepository(LibraryDatabase db)
             foreach (var vector in vectors)
             {
                 using var search = c.CreateCommand();
-                search.CommandText = """
+                search.CommandText = $"""
                     WITH nearest AS (
                         SELECT rowid,distance FROM FaceVector WHERE embedding MATCH $vector AND k=1920
                         AND rowid IN (
@@ -211,6 +226,7 @@ public sealed class PeopleRepository(LibraryDatabase db)
                             WHERE m.Status!='Absent' AND f.ModelVersion=$version
                             AND f.SizeBytes=m.SizeBytes AND f.ModifiedAt=m.LastModifiedAt
                             AND ($folder IS NULL OR m.LibraryFolderId=$folder)
+                            {FilterSql(personId)}
                         )
                     )
                     SELECT m.Id,m.Payload,m.IndexedVersion,n.distance FROM nearest n
@@ -219,6 +235,7 @@ public sealed class PeopleRepository(LibraryDatabase db)
                     """;
                 search.Parameters.AddWithValue("$vector", vector); search.Parameters.AddWithValue("$version", version);
                 search.Parameters.AddWithValue("$folder", (object?)folder ?? DBNull.Value); search.Parameters.AddWithValue("$distance", 1 - threshold);
+                BindFilter(search, personId, version, threshold);
                 await using var reader = await search.ExecuteReaderAsync(ct);
                 while (await reader.ReadAsync(ct))
                 {

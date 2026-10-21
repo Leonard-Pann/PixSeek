@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using PixSeek.AI;
@@ -12,6 +13,8 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     public ObservableCollection<MediaRow> Rows { get; } = [];
     public ObservableCollection<LibraryFolder> Folders { get; } = [];
     public ObservableCollection<LibraryFolder> FolderOptions { get; } = [];
+    public ObservableCollection<PersonOption> PersonOptions { get; } = [];
+    [ObservableProperty] private PersonOption? _selectedPerson;
     public Choice[] Types { get; } = [new("Tout", "AllMedia"), new("Photos", "Photos"), new("Vidéos", "Videos")];
     public Choice[] Sorts { get; } = [new("Date", "Date"), new("Nom", "Name"), new("Taille", "Size")];
 
@@ -56,6 +59,12 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     }
 
     private IReadOnlyList<MediaCardViewModel> _cards = [];
+    private readonly Dictionary<long, (string Path, bool IsVideo)> _selection = [];
+    private int _selectionVersion;
+    private bool _updatingSelection;
+    public int SelectedCount => _selection.Count;
+    public bool HasSelection => SelectedCount > 0;
+    public string SelectionSummary => TranslationService.Text("SelectedMediaCount", SelectedCount);
     private readonly SemaphoreSlim _loadGate = new(1, 1);
     private int _columns = 4, _filterVersion, _loadedFilterVersion = -1;
     private bool _suspendFilters;
@@ -67,7 +76,7 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     public Action<IReadOnlyList<string>>? OptimizeFiles { get; set; }
     public Action? OpenSettings { get; set; }
     public Action<IReadOnlyList<string>>? AddPerson { get; set; }
-    [RelayCommand] private void Person() => AddPerson?.Invoke(_cards.Where(c => c.IsSelected && !c.IsVideo).Select(c => c.Media.FullPath).ToArray());
+    [RelayCommand] private void Person() => AddPerson?.Invoke(_selection.Values.Where(c => !c.IsVideo).Select(c => c.Path).ToArray());
     public Func<Task>? AddFolder { get; set; }
     public event Action? ScrollToTopRequested;
     public bool HasQuery => !string.IsNullOrEmpty(Query);
@@ -83,15 +92,64 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     }
 
     [RelayCommand]
-    private void Compress() => OptimizeFiles?.Invoke(_cards.Where(c => c.IsSelected).Select(c => c.Media.FullPath).ToArray());
-    public void CompressMedia(MediaCardViewModel card) => OptimizeFiles?.Invoke(card.IsSelected ? _cards.Where(c => c.IsSelected).Select(c => c.Media.FullPath).ToArray() : [card.Media.FullPath]);
+    private void Compress() => OptimizeFiles?.Invoke(_selection.Values.Select(c => c.Path).ToArray());
+    public void CompressMedia(MediaCardViewModel card) => OptimizeFiles?.Invoke(card.IsSelected ? _selection.Values.Select(c => c.Path).ToArray() : [card.Media.FullPath]);
+
+    [RelayCommand]
+    private async Task SelectAllAsync()
+    {
+        var version = _filterVersion;
+        var selectionVersion = ++_selectionVersion;
+        try
+        {
+            var type = SelectedType; var folder = FolderId; var person = PersonId;
+            var items = IsSearch
+                ? _cards.Select(c => (c.Media.Id, Path: c.Media.FullPath, c.IsVideo)).ToArray()
+                : await Task.Run(() => db.SelectionAsync(type, folder, person, faceModels.Version, FaceEmbeddingService.MatchThreshold));
+            if (version != _filterVersion || selectionVersion != _selectionVersion) return;
+            _selection.Clear();
+            foreach (var item in items) _selection[item.Id] = (item.Path, item.IsVideo);
+            UpdateSelectedCards();
+        }
+        catch (Exception e) { Error?.Invoke(e.Message); }
+    }
+
+    [RelayCommand]
+    private void DeselectAll()
+    {
+        ++_selectionVersion;
+        _selection.Clear();
+        UpdateSelectedCards();
+    }
+
+    private void CardSelectionChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (_updatingSelection || args.PropertyName != nameof(MediaCardViewModel.IsSelected) || sender is not MediaCardViewModel card) return;
+        ++_selectionVersion;
+        if (card.IsSelected) _selection[card.Media.Id] = (card.Media.FullPath, card.IsVideo);
+        else _selection.Remove(card.Media.Id);
+        NotifySelection();
+    }
+
+    private void UpdateSelectedCards()
+    {
+        _updatingSelection = true;
+        try { foreach (var card in _cards) card.IsSelected = _selection.ContainsKey(card.Media.Id); }
+        finally { _updatingSelection = false; }
+        NotifySelection();
+    }
+    private void NotifySelection()
+    {
+        OnPropertyChanged(nameof(SelectedCount));
+        OnPropertyChanged(nameof(HasSelection));
+        OnPropertyChanged(nameof(SelectionSummary));
+    }
     [RelayCommand]
     private void Open(MediaCardViewModel? card)
     {
         if (card != null)
             OpenMedia?.Invoke(card);
     }
-
     [RelayCommand]
     private Task RefreshAsync() => LoadResultsAsync(IsSearch);
     [RelayCommand]
@@ -122,6 +180,7 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
         _suspendFilters = true;
         SelectedFolder = FolderOptions.FirstOrDefault();
         SelectedType = "Tout";
+        SelectedPerson = PersonOptions.FirstOrDefault();
         _suspendFilters = false;
         ++_filterVersion;
         await LoadResultsAsync(IsSearch);
@@ -148,6 +207,7 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     }
 
     partial void OnSelectedFolderChanged(LibraryFolder? value) => ScheduleFilterRefresh();
+    partial void OnSelectedPersonChanged(PersonOption? value) => ScheduleFilterRefresh();
     partial void OnQueryChanged(string value)
     {
         OnPropertyChanged(nameof(HasQuery));
@@ -180,6 +240,7 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     }
 
     private long? FolderId => SelectedFolder?.Id > 0 ? SelectedFolder.Id : null;
+    private long? PersonId => SelectedPerson?.Id > 0 ? SelectedPerson.Id : null;
 
     private async Task LoadResultsAsync(bool search, bool background = false, bool append = false)
     {
@@ -206,7 +267,8 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
                 var query = Query;
                 var type = SelectedType;
                 var folder = FolderId;
-                var namesTask = Task.Run(() => db.FilenameCandidatesAsync(query, type, folder));
+                var person = PersonId;
+                var namesTask = Task.Run(() => db.FilenameCandidatesAsync(query, type, folder, personId: person, faceVersion: faceModels.Version));
                 IReadOnlyList<SearchResult> nearest = [];
                 if (models.FilesPresent)
                 {
@@ -217,11 +279,11 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
                         _encodedVersion = models.Version;
                     }
 
-                    nearest = await Task.Run(() => db.SearchFilteredAsync(_queryVector, 240, type, folder));
+                    nearest = await Task.Run(() => db.SearchFilteredAsync(_queryVector, 240, type, folder, personId: person, faceVersion: faceModels.Version));
                 }
 
                 var hybrid = HybridRanking.Merge(query, nearest, await namesTask, 240);
-                var personMatches = await Task.Run(() => people.SearchAsync(query, type, folder, faceModels.Version, FaceEmbeddingService.MatchThreshold));
+                var personMatches = await Task.Run(() => people.SearchAsync(query, type, folder, faceModels.Version, FaceEmbeddingService.MatchThreshold, personId: person));
                 results = personMatches.Select(p => new SearchResult(p.Media, p.Similarity, null, p.Media.ThumbnailPath))
                     .Concat(hybrid).DistinctBy(p => p.Media.Id).Take(240).ToArray();
                 if (version != _filterVersion) return;
@@ -236,7 +298,8 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
                 var type = SelectedType;
                 var sort = SelectedSort;
                 var folder = FolderId;
-                var media = await Task.Run(() => db.MediaAsync(offset, limit + 1, type, sort, folder));
+                var person = PersonId;
+                var media = await Task.Run(() => db.MediaAsync(offset, limit + 1, type, sort, folder, personId: person, faceVersion: faceModels.Version));
                 if (version != _filterVersion) return;
                 HasMore = media.Count > limit;
                 IsSearch = false;
@@ -272,8 +335,13 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
                 return card;
             }
 
-            return new MediaCardViewModel(result);
+            var created = new MediaCardViewModel(result) { IsSelected = _selection.ContainsKey(result.Media.Id) };
+            created.PropertyChanged += CardSelectionChanged;
+            return created;
         }).ToArray();
+        var retained = _cards.ToHashSet();
+        foreach (var removed in existing.Values.Where(c => !retained.Contains(c))) removed.PropertyChanged -= CardSelectionChanged;
+        UpdateSelectedCards();
         ApplyRows();
     }
 
@@ -320,11 +388,36 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     }
 
     public Task RefreshInBackgroundAsync() => LoadResultsAsync(IsSearch, background: true);
+    public async Task RefreshPeopleAsync()
+    {
+        var selectedId = SelectedPerson?.Id ?? 0;
+        var profiles = await Task.Run(() => people.ProfilesAsync());
+        var options = new[] { new PersonOption(0, TranslationService.Text("AllPeople")) }
+            .Concat(profiles.Select(p => new PersonOption(p.Id, string.Join(", ", p.Keywords)))).ToArray();
+        if (PersonOptions.SequenceEqual(options)) return;
+        var suspended = _suspendFilters;
+        _suspendFilters = true;
+        try
+        {
+            PersonOptions.Clear();
+            foreach (var option in options) PersonOptions.Add(option);
+            SelectedPerson = PersonOptions.FirstOrDefault(p => p.Id == selectedId) ?? PersonOptions[0];
+            if ((SelectedPerson?.Id ?? 0) != selectedId) ++_filterVersion;
+        }
+        finally { _suspendFilters = suspended; }
+    }
     public async Task LoadAsync(bool resetPage = true)
     {
         _suspendFilters = true;
         try
         {
+            await RefreshPeopleAsync();
+            if (_selection.Count > 0)
+            {
+                var current = await Task.Run(() => db.SelectionAsync("Tout", null, null, faceModels.Version, FaceEmbeddingService.MatchThreshold));
+                var present = current.Select(m => m.Id).ToHashSet();
+                foreach (var removed in _selection.Keys.Where(id => !present.Contains(id)).ToArray()) _selection.Remove(removed);
+            }
             var selectedId = SelectedFolder?.Id ?? 0;
             var folders = await Task.Run(() => db.FoldersAsync());
             if (!Folders.SequenceEqual(folders))

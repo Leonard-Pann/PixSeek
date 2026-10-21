@@ -22,6 +22,7 @@ public partial class MainViewModel : ObservableObject
     private readonly DispatcherTimer _refreshTimer;
     private bool _refreshingGallery, _rescanRequested, _stopped;
     private int _modelScanRequest;
+    private int _facesDirty;
     public LibraryViewModel Library { get; }
     public OptimizerViewModel Optimizer { get; }
     public SettingsViewModel Settings { get; }
@@ -68,7 +69,12 @@ public partial class MainViewModel : ObservableObject
         People.Error = ShowError;
         Library.AddPerson = paths => { IsPersonDialogOpen = true; People.Prepare(paths); };
         People.RequestClose = () => IsPersonDialogOpen = false;
-        People.IndexUpdated = () => Library.RefreshInBackgroundAsync();
+        People.IndexUpdated = async () =>
+        {
+            await Library.RefreshPeopleAsync();
+            await Library.RefreshInBackgroundAsync();
+        };
+        _indexer.PhotoPrepared += () => Interlocked.Exchange(ref _facesDirty, 1);
         Library.Error = ShowError;
         Optimizer.Error = ShowError;
         Settings.Error = ShowError;
@@ -113,7 +119,8 @@ public partial class MainViewModel : ObservableObject
         };
         _refreshTimer.Tick += async (_, _) =>
         {
-            if (!IsIndexing || _refreshingGallery)
+            if (Interlocked.Exchange(ref _facesDirty, 0) != 0 && !_stopped) People.QueueIndex();
+            if ((!IsIndexing && !People.IsIndexing) || _refreshingGallery)
                 return;
             _refreshingGallery = true;
             try
@@ -175,8 +182,8 @@ public partial class MainViewModel : ObservableObject
             Status = TranslationService.Text("Ready");
             _refreshTimer.Start();
             _monitor.Update(await _db.FoldersAsync());
-            await CheckForLibraryChangesAsync();
             People.QueueIndex();
+            await CheckForLibraryChangesAsync();
         }
         catch (Exception e)
         {

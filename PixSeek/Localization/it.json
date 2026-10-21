@@ -113,5 +113,10 @@
   "FacesReady": "Indice dei volti pronto",
   "PersonExplanation": "Scegli alcune foto della stessa persona. I volti vengono confrontati localmente sul computer. Le parole chiave danno priorità alle foto corrispondenti. Il riconoscimento può sbagliare.",
   "ReferenceLimit": "Scegli al massimo 20 foto di riferimento della stessa persona.",
-  "ReferencePhotoSingular": "1 foto di riferimento"
+  "ReferencePhotoSingular": "1 foto di riferimento",
+  "SelectAll": "Seleziona tutto",
+  "DeselectAll": "Deseleziona tutto",
+  "AllPeople": "Tutte le persone",
+  "Pause": "Pausa",
+  "SelectedMediaCount": "{0} selezionati"
 }

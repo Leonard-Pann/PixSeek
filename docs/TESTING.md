@@ -61,3 +61,11 @@ La suite comporte 34 tests. Les nouveaux tests couvrent 3 200 fiches/vecteurs, l
 ## Validation 0.3.0
 
 Installer aussi scripts/install-face-models.ps1 (YuNet/SFace, environ 39 Mo). La suite contient 38 tests et inclut deux vrais portraits, une image de groupe générée, la persistance/recherche/suppression des personnes, la survie du presse-papier après fermeture/cache, les flèches fixes, le démarrage vidéo, le champ de recherche et les choix de codec/dossier effectivement affichés. Rapport : tests/PixSeek.Tests/TestResults/pixseek-0.3.0.trx. Voir RELEASE_0.3.0.md et PEOPLE.md. Les tests de recherche/défilement n'accèdent pas aux médias privés.
+
+## Validation 0.3.1
+
+La suite ajoute la sélection globale sur 3200 fiches, la pagination de 260 correspondances faciales, le survol individuel et le chargement d'icône, les réservations de bitmaps lors d'annulations/vidages concurrents, le préchargement bloqué n'empêchant pas une autre ouverture, le plafond effectif de 4096 pixels pour les PNG et le partage du runtime vidéo. Le pipeline exécute YuNet/SFace sans profil pendant que l'initialisation sémantique réelle est volontairement bloquée, puis confirme que les signatures évitent un nouveau calcul.
+
+Commande : dotnet test tests/PixSeek.Tests/PixSeek.Tests.csproj --logger "trx;LogFileName=pixseek-0.3.1.trx"
+
+Le test OpeningBenchmark produit artifacts/opening-performance-0.3.1.json sur JPEG/PNG/WebP/JPEG XL de 12 MP et vidéo H.264 locale. Ce n'est pas une mesure de tout le corpus privé ; les durées varient selon le stockage et la charge. Voir RELEASE_0.3.1.md pour les résultats observés.

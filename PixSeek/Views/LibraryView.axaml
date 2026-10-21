@@ -8,17 +8,27 @@
     </Grid>
     <StackPanel Grid.Row="1" Spacing="12" Margin="0,0,0,14">
       <WrapPanel>
+        <Button x:Name="SelectAllButton" Content="{loc:T SelectAll}" Command="{Binding SelectAllCommand}" Margin="0,0,8,8" />
+        <Button x:Name="DeselectAllButton" Content="{loc:T DeselectAll}" Command="{Binding DeselectAllCommand}" Margin="0,0,10,8" />
         <ComboBox x:Name="MediaTypeFilter" ItemsSource="{Binding Types}" SelectedItem="{Binding SelectedTypeChoice}" Margin="0,0,10,8" ToolTip.Tip="{loc:T AllMedia}"><ComboBox.ItemTemplate><DataTemplate x:DataType="loc:Choice"><TextBlock Text="{Binding Label}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
         <ComboBox x:Name="FolderFilter" ItemsSource="{Binding FolderOptions}" SelectedItem="{Binding SelectedFolder}" PlaceholderText="{loc:T AllFolders}" MaxWidth="220" MinWidth="170" Margin="0,0,10,8" ToolTip.Tip="{loc:T AllFolders}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
         <ComboBox ItemsSource="{Binding Sorts}" SelectedItem="{Binding SelectedSortChoice}" Margin="0,0,10,8" ToolTip.Tip="{loc:T Date}"><ComboBox.ItemTemplate><DataTemplate x:DataType="loc:Choice"><TextBlock Text="{Binding Label}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+        <ComboBox x:Name="PersonFilter" ItemsSource="{Binding PersonOptions}" SelectedItem="{Binding SelectedPerson}" MinWidth="150" MaxWidth="210" Margin="0,0,10,8" ToolTip.Tip="{loc:T AllPeople}"><ComboBox.ItemTemplate><DataTemplate x:DataType="vm:PersonOption"><TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
         <Button Content="{loc:T ClearFilters}" Command="{Binding ClearFiltersCommand}" Margin="0,0,10,8" />
         <Button x:Name="AddPersonButton" Content="{loc:T AddPerson}" Command="{Binding PersonCommand}" Margin="0,0,10,8" /><Button x:Name="CompressButton" Content="{loc:T Compress}" Command="{Binding CompressCommand}" Margin="0,0,0,8" />
       </WrapPanel>
-      <TextBlock Text="{Binding Summary}" Classes="subtitle" FontSize="12" />
+      <StackPanel Orientation="Horizontal" Spacing="16"><TextBlock Text="{Binding Summary}" Classes="subtitle" FontSize="12" /><TextBlock Text="{Binding SelectionSummary}" IsVisible="{Binding HasSelection}" Classes="subtitle" FontSize="12" /></StackPanel>
       <Border Height="3"><ProgressBar IsIndeterminate="True" IsVisible="{Binding IsLoading}" Height="3" /></Border>
     </StackPanel>
     <controls:MediaGallery Grid.Row="2" x:Name="GalleryList" ItemsSource="{Binding Rows}" Background="Transparent" BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SizeChanged="GallerySizeChanged">
-      <ListBox.Styles><Style Selector="ListBoxItem"><Setter Property="Padding" Value="0" /><Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="Focusable" Value="False" /><Setter Property="Background" Value="Transparent" /></Style></ListBox.Styles>
+      <ListBox.Styles>
+        <Style Selector="ListBoxItem">
+          <Setter Property="Padding" Value="0" /><Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="Focusable" Value="False" />
+          <Setter Property="Template"><ControlTemplate><ContentPresenter Name="GalleryRowContent" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" HorizontalContentAlignment="Stretch" /></ControlTemplate></Setter>
+        </Style>
+        <Style Selector="Border.mediaCard"><Setter Property="BorderBrush" Value="Transparent" /></Style>
+        <Style Selector="Border.mediaCard:pointerover"><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /></Style>
+      </ListBox.Styles>
       <ListBox.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate></ListBox.ItemsPanel>
       <ListBox.ItemTemplate>
         <DataTemplate x:DataType="vm:MediaRow">
@@ -26,7 +36,7 @@
             <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" Columns="{Binding Columns}" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate x:DataType="vm:MediaCardViewModel">
-                <Border CornerRadius="14" Background="{DynamicResource SurfaceBrush}" Margin="4" ClipToBounds="True">
+                <Border Classes="mediaCard" CornerRadius="14" Background="{DynamicResource SurfaceBrush}" Margin="4" BorderThickness="2" ClipToBounds="True">
                   <Grid RowDefinitions="180,Auto">
                     <Button Padding="0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Background="{DynamicResource SidebarBrush}" CornerRadius="12" Click="OpenMedia" ToolTip.Tip="{Binding Details}">
                       <Button.ContextMenu><ContextMenu><MenuItem Header="{loc:T Read}" Click="OpenFromMenu" /><MenuItem Header="{loc:T Compress}" Click="OptimizeFile" /><MenuItem Header="{loc:T OpenLocation}" Click="OpenLocation" /></ContextMenu></Button.ContextMenu>

@@ -12,6 +12,7 @@ public sealed class LibraryIndexer(LibraryDatabase db, ImageMagickService images
     ModelManager models, SettingsStore settings, ILogger<LibraryIndexer> logger)
 {
     private readonly SemaphoreSlim _singleScan = new(1, 1);
+    public event Action? PhotoPrepared;
     private sealed record PlannedMedia(LibraryFolder Folder, string Path, MediaFile? Existing, MediaMetadata? Metadata, int Units);
     private sealed record PlannedFolder(LibraryFolder Folder, IReadOnlyList<PlannedMedia> Items);
 
@@ -52,12 +53,13 @@ public sealed class LibraryIndexer(LibraryDatabase db, ImageMagickService images
                     var info = new FileInfo(path);
                     var unchanged = IsUnchanged(old, info);
                     var ready = unchanged && !force && old!.Status is not ("Erreur" or "Absent") &&
-                        File.Exists(old.ThumbnailPath) && (!ai || old.IndexedVersion == version);
+                        File.Exists(old.ThumbnailPath) && (!ai || old.IndexedVersion == version) &&
+                        (old.MediaType != MediaType.Video || old.VideoDisplayWidth > 0);
                     MediaMetadata? metadata = null;
                     var units = ready ? 0 : ai ? 4 : 2;
                     if (!ready && ai && MediaFormats.TypeOf(path) == MediaType.Video)
                     {
-                        try { metadata = (await probe.ProbeAsync(path, ct)) with { RawJson = null }; }
+                        try { metadata = await probe.ProbeAsync(path, ct); }
                         catch (OperationCanceledException) { throw; }
                         catch (Exception e) { logger.LogDebug(e, "Préparation vidéo impossible : {Path}", path); }
                         units = 3 + 2 * Timestamps(metadata?.DurationMilliseconds ?? old?.DurationMilliseconds ?? 0).Count;
@@ -177,14 +179,17 @@ public sealed class LibraryIndexer(LibraryDatabase db, ImageMagickService images
                                 };
                                 var metadata = item.Metadata ?? (media.MediaType == MediaType.Image
                                     ? await images.IdentifyAsync(item.Path, token) : await probe.ProbeAsync(item.Path, token));
+                                var display = media.MediaType == MediaType.Video ? FfprobeService.DisplaySize(metadata) : (0, 0);
                                 media = await db.SaveMediaAsync(media with
                                 {
                                     Width = metadata.Width, Height = metadata.Height, DurationMilliseconds = metadata.DurationMilliseconds,
                                     Codec = metadata.Codec, HasAlpha = metadata.HasAlpha, FrameCount = metadata.FrameCount,
+                                    VideoDisplayWidth = display.Item1, VideoDisplayHeight = display.Item2,
                                     Status = "Miniature en cours", ErrorMessage = null
                                 }, token);
                                 var thumb = await thumbnails.CreateAsync(media, token);
                                 await db.SaveMediaAsync(media with { ThumbnailPath = thumb, Status = "Miniature prête" }, token);
+                                if (media.MediaType == MediaType.Image) PhotoPrepared?.Invoke();
                                 Advance(2, "Miniature · " + media.FileName);
                                 if (ai && (force || !unchanged || media.IndexedVersion != version))
                                     await readyForAi.Writer.WriteAsync(item, token);

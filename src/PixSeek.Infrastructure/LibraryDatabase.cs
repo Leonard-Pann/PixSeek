@@ -229,12 +229,13 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
         };
     }
 
-    public async Task<IReadOnlyList<MediaFile>> MediaAsync(int offset = 0, int limit = 240, string type = "Tout", string sort = "Date", long? folder = null, CancellationToken ct = default, DateTime? fromDate = null, DateTime? toDateExclusive = null)
+    public async Task<IReadOnlyList<MediaFile>> MediaAsync(int offset = 0, int limit = 240, string type = "Tout", string sort = "Date", long? folder = null, CancellationToken ct = default, DateTime? fromDate = null, DateTime? toDateExclusive = null, long? personId = null, string? faceVersion = null, double faceThreshold = .45)
     {
         await using var c = await OpenAsync(ct);
         using var cmd = c.CreateCommand();
         var order = sort == "Nom" ? "FileName COLLATE NOCASE" : sort == "Taille" ? "SizeBytes DESC" : "LastModifiedAt DESC";
-        cmd.CommandText = $"SELECT Id,Payload,IndexedVersion FROM MediaFile WHERE Status != 'Absent' AND ($type < 0 OR MediaType=$type) AND ($folder IS NULL OR LibraryFolderId=$folder) AND ($from IS NULL OR julianday(LastModifiedAt)>=julianday($from)) AND ($to IS NULL OR julianday(LastModifiedAt)<julianday($to)) ORDER BY {order},Id DESC LIMIT $limit OFFSET $offset";
+        cmd.CommandText = $"SELECT m.Id,m.Payload,m.IndexedVersion FROM MediaFile m WHERE m.Status != 'Absent' AND ($type < 0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder) AND ($from IS NULL OR julianday(m.LastModifiedAt)>=julianday($from)) AND ($to IS NULL OR julianday(m.LastModifiedAt)<julianday($to)) {PeopleRepository.FilterSql(personId)} ORDER BY {order},m.Id DESC LIMIT $limit OFFSET $offset";
+        PeopleRepository.BindFilter(cmd, personId, faceVersion, faceThreshold);
         cmd.Parameters.AddWithValue("$from", (object? )fromDate?.ToUniversalTime().ToString("O") ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$to", (object? )toDateExclusive?.ToUniversalTime().ToString("O") ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$type", type == "Photos" ? 0 : type == "Vidéos" ? 1 : -1);
@@ -245,6 +246,20 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
         var items = new List<MediaFile>();
         while (await r.ReadAsync(ct))
             items.Add(ReadMedia(r));
+        return items;
+    }
+
+    public async Task<IReadOnlyList<(long Id, string Path, bool IsVideo)>> SelectionAsync(string type, long? folder, long? personId, string faceVersion, double faceThreshold, CancellationToken ct = default)
+    {
+        await using var c = await OpenAsync(ct);
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = $"SELECT m.Id,m.FullPath,m.MediaType FROM MediaFile m WHERE m.Status!='Absent' AND ($type<0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder) {PeopleRepository.FilterSql(personId)}";
+        cmd.Parameters.AddWithValue("$type", type == "Photos" ? 0 : type == "Vidéos" ? 1 : -1);
+        cmd.Parameters.AddWithValue("$folder", (object?)folder ?? DBNull.Value);
+        PeopleRepository.BindFilter(cmd, personId, faceVersion, faceThreshold);
+        await using var reader = await cmd.ExecuteReaderAsync(ct);
+        var items = new List<(long, string, bool)>();
+        while (await reader.ReadAsync(ct)) items.Add((reader.GetInt64(0), reader.GetString(1), reader.GetInt32(2) == 1));
         return items;
     }
 
@@ -260,11 +275,12 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
         return result;
     }
 
-    public async Task<IReadOnlyList<MediaFile>> FilenameCandidatesAsync(string query, string type = "Tout", long? folder = null, CancellationToken ct = default)
+    public async Task<IReadOnlyList<MediaFile>> FilenameCandidatesAsync(string query, string type = "Tout", long? folder = null, CancellationToken ct = default, long? personId = null, string? faceVersion = null, double faceThreshold = .45)
     {
         await using var c = await OpenAsync(ct);
         using var cmd = c.CreateCommand();
-        cmd.CommandText = "SELECT Id,Payload,IndexedVersion,FileName FROM MediaFile WHERE Status != 'Absent' AND ($type < 0 OR MediaType=$type) AND ($folder IS NULL OR LibraryFolderId=$folder)";
+        cmd.CommandText = $"SELECT m.Id,m.Payload,m.IndexedVersion,m.FileName FROM MediaFile m WHERE m.Status != 'Absent' AND ($type < 0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder) {PeopleRepository.FilterSql(personId)}";
+        PeopleRepository.BindFilter(cmd, personId, faceVersion, faceThreshold);
         cmd.Parameters.AddWithValue("$type", type == "Photos" ? 0 : type == "Vidéos" ? 1 : -1);
         cmd.Parameters.AddWithValue("$folder", (object? )folder ?? DBNull.Value);
         await using var reader = await cmd.ExecuteReaderAsync(ct);
@@ -403,7 +419,7 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
     public Task<IReadOnlyList<SearchResult>> SearchAsync(ReadOnlyMemory<float> queryEmbedding, int maxResults, CancellationToken cancellationToken)
         => SearchFilteredAsync(queryEmbedding, maxResults, "Tout", null, cancellationToken);
 
-    public async Task<IReadOnlyList<SearchResult>> SearchFilteredAsync(ReadOnlyMemory<float> queryEmbedding, int maxResults, string type, long? folder, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<SearchResult>> SearchFilteredAsync(ReadOnlyMemory<float> queryEmbedding, int maxResults, string type, long? folder, CancellationToken cancellationToken = default, long? personId = null, string? faceVersion = null, double faceThreshold = .45)
     {
         if (maxResults is < 1 or > 512)
             throw new ArgumentOutOfRangeException(nameof(maxResults));
@@ -411,13 +427,14 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
             throw new ArgumentException("Index vectoriel non initialisé ou dimension incompatible.");
         await using var c = await OpenAsync(cancellationToken);
         using var cmd = c.CreateCommand();
-        cmd.CommandText = """
+        cmd.CommandText = $"""
             WITH nearest AS (
                 SELECT rowid,distance FROM MediaVector WHERE embedding MATCH $vector AND k=$k
                 AND rowid IN (
                     SELECT e.Id FROM MediaEmbedding e JOIN MediaFile m ON m.Id=e.MediaFileId
                     WHERE m.Status != 'Absent' AND m.IndexedVersion IS NOT NULL
                     AND ($type < 0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder)
+                    {PeopleRepository.FilterSql(personId)}
                 )
             )
             SELECT m.Id,m.Payload,m.IndexedVersion,n.distance,f.TimestampMilliseconds,f.ThumbnailPath
@@ -428,6 +445,7 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
         cmd.Parameters.AddWithValue("$type", type == "Photos" ? 0 : type == "Vidéos" ? 1 : -1);
         cmd.Parameters.AddWithValue("$folder", (object?)folder ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$k", Math.Clamp(maxResults * 8, 1, 4096));
+        PeopleRepository.BindFilter(cmd, personId, faceVersion, faceThreshold);
         await using var r = await cmd.ExecuteReaderAsync(cancellationToken);
         var items = new List<SearchResult>();
         var seen = new HashSet<long>();

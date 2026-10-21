@@ -17,6 +17,8 @@ La première compilation télécharge automatiquement XLM-RoBERTa + ViT-B/32 (en
 
 Les poids sont ignorés par Git. Ils accompagnent les archives de release, sans entrer dans l'historique du dépôt.
 
+Les corrections de sélection, filtre de personnes et performances de la version 0.3.1 sont décrites dans [docs/RELEASE_0.3.1.md](docs/RELEASE_0.3.1.md). L'analyse faciale démarre désormais à l'import, sur un worker indépendant de l'index sémantique.
+
 ## Fonctionnalités
 
 - Dossiers référencés sans déplacement des originaux, scan récursif et surveillance des changements.

@@ -113,5 +113,10 @@
   "FacesReady": "Índice de rostros listo",
   "PersonExplanation": "Elige algunas fotos de la misma persona. Los rostros se comparan localmente en tu ordenador. Las palabras clave dan prioridad a las fotos correspondientes. El reconocimiento puede equivocarse.",
   "ReferenceLimit": "Elige como máximo 20 fotos de referencia de la misma persona.",
-  "ReferencePhotoSingular": "1 foto de referencia"
+  "ReferencePhotoSingular": "1 foto de referencia",
+  "SelectAll": "Seleccionar todo",
+  "DeselectAll": "Deseleccionar todo",
+  "AllPeople": "Todas las personas",
+  "Pause": "Pausa",
+  "SelectedMediaCount": "{0} seleccionados"
 }

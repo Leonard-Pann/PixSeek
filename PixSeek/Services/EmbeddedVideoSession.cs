@@ -18,6 +18,7 @@ public sealed class EmbeddedVideoSession : IAsyncDisposable
     private readonly uint _width, _height, _pitch;
     private volatile bool _disposed;
     private int _queued;
+    private readonly Action _release;
     public WriteableBitmap Frame { get; }
 
     public event Action? FrameAvailable;
@@ -36,10 +37,10 @@ public sealed class EmbeddedVideoSession : IAsyncDisposable
             LibVLCSharp.Shared.Core.Initialize();
     }
 
-    public EmbeddedVideoSession(int width, int height, bool silent = false)
+    internal EmbeddedVideoSession(VideoRuntime runtime, int width, int height, Action release, bool silent = false)
     {
-        InitializeNative();
-        _lib = new LibVLC(silent ? ["--quiet", "--no-video-title-show", "--avcodec-hw=none", "--aout=dummy"] : ["--quiet", "--no-video-title-show", "--avcodec-hw=none"]);
+        _release = release;
+        _lib = runtime.Get(silent);
         Player = new MediaPlayer(_lib);
         var factor = Math.Min(1d, Math.Min(1920d / Math.Max(1, width), 1080d / Math.Max(1, height)));
         _width = (uint)Math.Max(16, (int)(width * factor));
@@ -111,7 +112,6 @@ public sealed class EmbeddedVideoSession : IAsyncDisposable
             {
                 Player.Stop();
                 Player.Dispose();
-                _lib.Dispose();
             }
         });
         lock (_frameGate)
@@ -120,5 +120,6 @@ public sealed class EmbeddedVideoSession : IAsyncDisposable
             _buffer = IntPtr.Zero;
             Frame.Dispose();
         }
+        _release();
     }
 }

@@ -26,6 +26,8 @@ public sealed record MediaFile
     public int Width { get; init; }
     public int Height { get; init; }
     public long DurationMilliseconds { get; init; }
+    public int VideoDisplayWidth { get; init; }
+    public int VideoDisplayHeight { get; init; }
     public string Codec { get; init; } = "";
     public string ThumbnailPath { get; init; } = "";
     public string Status { get; init; } = "Découvert";

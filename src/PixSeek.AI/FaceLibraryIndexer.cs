@@ -7,12 +7,13 @@ namespace PixSeek.AI;
 public sealed class FaceLibraryIndexer(LibraryDatabase db, PeopleRepository people, FaceEmbeddingService engine, ILogger<FaceLibraryIndexer> logger)
 {
     private readonly SemaphoreSlim _single = new(1);
+    public int AnalysisCount { get; private set; }
     public async Task ScanAsync(IProgress<WorkProgress> progress, CancellationToken ct)
     {
         await _single.WaitAsync(ct);
         try
         {
-            if ((await people.ProfilesAsync(ct)).Count == 0) return;
+            await people.InitializeAsync(ct);
             await people.PruneAsync(ct);
             for (var offset = 0; ; offset += 120)
             {
@@ -26,6 +27,7 @@ public sealed class FaceLibraryIndexer(LibraryDatabase db, PeopleRepository peop
                     try
                     {
                         var faces = await engine.DetectAsync(item.FullPath, ct);
+                        AnalysisCount++;
                         var info = new FileInfo(item.FullPath);
                         if (!info.Exists || info.Length != item.SizeBytes || info.LastWriteTimeUtc != item.LastModifiedAt) continue;
                         await people.SaveFacesAsync(item, faces, engine.Version, ct);

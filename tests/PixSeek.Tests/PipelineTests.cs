@@ -14,7 +14,7 @@ public sealed class PipelineTests(TestEnvironment e) : IClassFixture<TestEnviron
         var root = Path.Combine(e.Work, "parallel-library");
         Directory.CreateDirectory(root);
         for (var i = 0; i < 24; i++)
-            File.Copy(Path.Combine(e.Root, "tests", "fixtures", "coffee.png"), Path.Combine(root, $"photo-{i}.png"));
+            File.Copy(Path.Combine(e.Root, "tests", "fixtures", i == 0 ? "astronaut.png" : "coffee.png"), Path.Combine(root, $"photo-{i}.png"));
         var paths = new ModelPaths(e.Paths, Path.Combine(e.Root, "models"));
         var manager = new ModelManager(paths);
         using var real = new OnnxEmbeddingService(manager, e.Images, new CpuExecutionProviderFactory());
@@ -22,6 +22,8 @@ public sealed class PipelineTests(TestEnvironment e) : IClassFixture<TestEnviron
         var indexer = new LibraryIndexer(e.Db, e.Images, e.Probe, new(paths, e.Images, e.Video), e.Video,
             gate, manager, new SettingsStore(paths), NullLogger<LibraryIndexer>.Instance);
         var folder = await e.Db.AddFolderAsync(root, true);
+        var prepared = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        indexer.PhotoPrepared += () => prepared.TrySetResult();
         using var control = new JobControl();
         var scan = indexer.ScanAsync([folder], control, new Progress<WorkProgress>());
         try
@@ -38,6 +40,24 @@ public sealed class PipelineTests(TestEnvironment e) : IClassFixture<TestEnviron
             Assert.All(media, m => Assert.True(File.Exists(m.ThumbnailPath)));
             Assert.False(scan.IsCompleted);
             Assert.All(media, m => Assert.Null(m.IndexedVersion));
+            await prepared.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var people = new PeopleRepository(e.Db);
+            using var faceEngine = new FaceEmbeddingService(new FaceModelManager(paths), e.Images, paths);
+            var faceIndexer = new FaceLibraryIndexer(e.Db, people, faceEngine, NullLogger<FaceLibraryIndexer>.Instance);
+            await Task.Run(() => faceIndexer.ScanAsync(new Progress<WorkProgress>(), default));
+            Assert.Empty(await people.ProfilesAsync());
+            var analyzed = faceIndexer.AnalysisCount;
+            Assert.True(analyzed >= 24);
+            await using var c = await e.Db.OpenAsync();
+            using var command = c.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM FaceVector";
+            Assert.True((long)(await command.ExecuteScalarAsync())! >= 1);
+            command.CommandText = "SELECT COUNT(*) FROM FaceScan s JOIN MediaFile m ON m.Id=s.MediaFileId WHERE m.LibraryFolderId=$id AND s.Status='Complete'";
+            command.Parameters.AddWithValue("$id", folder.Id);
+            Assert.Equal(24L, (long)(await command.ExecuteScalarAsync())!);
+            Assert.False(scan.IsCompleted); // Real face inference finished while semantic ONNX is still gated.
+            await faceIndexer.ScanAsync(new Progress<WorkProgress>(), default);
+            Assert.Equal(analyzed, faceIndexer.AnalysisCount);
         }
         finally { gate.Release.TrySetResult(); }
         await scan;

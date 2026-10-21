@@ -42,6 +42,7 @@ public sealed partial class UiTests
         vm.Settings.Language = vm.Settings.Languages.Single(l => l.Id == "fr");
         await vm.Settings.PendingSave;
         vm.Library.Query = "";
+        vm.Library.DeselectAllCommand.Execute(null);
         await vm.Library.ClearFiltersCommand.ExecuteAsync(null);
         vm.PageIndex = 1;
         await vm.Library.LoadAsync();

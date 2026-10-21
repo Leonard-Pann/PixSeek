@@ -113,5 +113,10 @@
   "FacesReady": "Gesichtsindex bereit",
   "PersonExplanation": "Wähle einige Fotos derselben Person. Gesichter werden lokal auf deinem Computer verglichen. Stichwörter priorisieren passende Fotos. Die Erkennung kann Fehler machen.",
   "ReferenceLimit": "Wähle höchstens 20 Referenzfotos derselben Person.",
-  "ReferencePhotoSingular": "1 Referenzfoto"
+  "ReferencePhotoSingular": "1 Referenzfoto",
+  "SelectAll": "Alle auswählen",
+  "DeselectAll": "Auswahl aufheben",
+  "AllPeople": "Alle Personen",
+  "Pause": "Pause",
+  "SelectedMediaCount": "{0} ausgewählt"
 }

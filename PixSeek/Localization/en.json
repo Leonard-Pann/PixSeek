@@ -113,5 +113,10 @@
   "FacesReady": "Face index ready",
   "PersonExplanation": "Choose a few photos of the same person. Faces are compared locally on your computer. Keywords give matching photos priority in search. Recognition can make mistakes.",
   "ReferenceLimit": "Choose at most 20 reference photos of the same person.",
-  "ReferencePhotoSingular": "1 reference photo"
+  "ReferencePhotoSingular": "1 reference photo",
+  "SelectAll": "Select all",
+  "DeselectAll": "Deselect all",
+  "AllPeople": "All people",
+  "Pause": "Pause",
+  "SelectedMediaCount": "{0} selected"
 }

@@ -1,7 +1,7 @@
 <Project>
   <PropertyGroup>
     <Nullable>enable</Nullable>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <VlcWindowsX86Enabled>false</VlcWindowsX86Enabled>
     <VlcWindowsArm64Enabled Condition="'$(RuntimeIdentifier)' == 'win-arm64'">true</VlcWindowsArm64Enabled>
     <VlcWindowsArm64Enabled Condition="'$(RuntimeIdentifier)' != 'win-arm64'">false</VlcWindowsArm64Enabled>

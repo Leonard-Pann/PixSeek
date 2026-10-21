@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <AvaloniaResource Include="Assets/**" />
     <PackageReference Include="LibVLCSharp" />
     <PackageReference Include="Avalonia.Skia" />
     <PackageReference Include="VideoLAN.LibVLC.Windows" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />

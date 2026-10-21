@@ -245,8 +245,8 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.ML.OnnxRuntime": "[1.31.0, )",
-          "PixSeek.Core": "[0.3.0, )",
-          "PixSeek.Media": "[0.3.0, )",
+          "PixSeek.Core": "[0.3.1, )",
+          "PixSeek.Media": "[0.3.1, )",
           "Tokenizers.HuggingFace": "[3.23.1, )"
         }
       },
@@ -258,15 +258,15 @@
         "dependencies": {
           "Microsoft.Data.Sqlite": "[10.0.13, )",
           "Microsoft.Extensions.Logging": "[10.0.13, )",
-          "PixSeek.Core": "[0.3.0, )"
+          "PixSeek.Core": "[0.3.1, )"
         }
       },
       "pixseek.media": {
         "type": "Project",
         "dependencies": {
           "Microsoft.Extensions.Logging": "[10.0.13, )",
-          "PixSeek.Core": "[0.3.0, )",
-          "PixSeek.Infrastructure": "[0.3.0, )"
+          "PixSeek.Core": "[0.3.1, )",
+          "PixSeek.Infrastructure": "[0.3.1, )"
         }
       },
       "Microsoft.Data.Sqlite": {

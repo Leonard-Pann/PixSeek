@@ -139,6 +139,10 @@ public sealed partial class UiTests
         }
         await vm.Library.LoadAsync();
         var window = Open(vm);
+        var faceIndexer = services.GetRequiredService<FaceLibraryIndexer>();
+        await faceIndexer.ScanAsync(new Progress<WorkProgress>(), default);
+        Assert.Empty(await people.ProfilesAsync());
+        var analysesBeforeFirstPerson = faceIndexer.AnalysisCount;
         vm.Library.PersonCommand.Execute(null);
         Assert.True(vm.IsPersonDialogOpen);
         await vm.People.PendingReferences;
@@ -171,6 +175,7 @@ public sealed partial class UiTests
         Capture(window, "pixseek-add-person");
         await vm.People.AddCommand.ExecuteAsync(null);
         await vm.People.PendingIndex;
+        Assert.Equal(analysesBeforeFirstPerson, faceIndexer.AnalysisCount);
         Assert.False(vm.IsPersonDialogOpen);
         vm.Library.Query = "Maman";
         await vm.Library.SearchCommand.ExecuteAsync(null);
@@ -184,14 +189,26 @@ public sealed partial class UiTests
         Assert.Empty(await reopened.SearchAsync("Camille", "Photos", otherFolder.Id, services.GetRequiredService<FaceModelManager>().Version, FaceEmbeddingService.MatchThreshold));
         Assert.Empty(await people.SearchAsync("Camille", "Vidéos", null, services.GetRequiredService<FaceModelManager>().Version, FaceEmbeddingService.MatchThreshold));
         var profile = Assert.Single(await people.ProfilesAsync());
+        Assert.Contains(vm.Library.PersonOptions, p => p.Id == profile.Id);
+        vm.Library.SelectedPerson = vm.Library.PersonOptions.Single(p => p.Id == profile.Id);
+        await vm.Library.PendingFilterRefresh;
+        await vm.Library.ClearQueryCommand.ExecuteAsync(null);
+        Assert.Equal(samePerson, Assert.Single(vm.Library.Cards).Media.FullPath);
+        vm.Library.SelectedType = "Vidéos";
+        await vm.Library.PendingFilterRefresh;
+        Assert.Empty(vm.Library.Cards);
+        await vm.Library.ClearFiltersCommand.ExecuteAsync(null);
+        Assert.Equal(0, vm.Library.SelectedPerson!.Id);
+        Assert.Equal(2, vm.Library.Cards.Count);
         await people.DeleteAsync(profile.Id);
         Assert.Empty(await people.ProfilesAsync());
         await using (var c = await db.OpenAsync())
         {
             using var command = c.CreateCommand();
             command.CommandText = "SELECT COUNT(*) FROM FaceVector";
-            Assert.Equal(0L, (long)(await command.ExecuteScalarAsync())!);
+            Assert.True((long)(await command.ExecuteScalarAsync())! >= 2);
         }
+        Assert.Empty(await people.SearchAsync("Camille", "Photos", null, services.GetRequiredService<FaceModelManager>().Version, FaceEmbeddingService.MatchThreshold));
         vm.Stop(); window.Close();
     }
 }
