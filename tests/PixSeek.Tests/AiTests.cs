@@ -22,8 +22,8 @@ public sealed class AiTests(TestEnvironment e) : IClassFixture<TestEnvironment>
     [Fact]
     public async Task RealOnnx_FrenchRetrieval_AndVideoSceneSearch()
     {
-        var modelPath = Path.Combine(e.Root, "artifacts", "models");
-        Assert.True(File.Exists(Path.Combine(modelPath, "textual", "model.onnx")), "Lancez scripts/install-model.ps1 avant ce test d'intégration.");
+        var modelPath = Path.Combine(e.Root, "models");
+        Assert.True(File.Exists(Path.Combine(modelPath, "xlmr", "textual", "model.onnx")), "Lancez scripts/install-model.ps1 avant ce test d'intégration.");
         var paths = new ModelPaths(e.Paths, modelPath);
         var manager = new ModelManager(paths);
         using var embeddings = new OnnxEmbeddingService(manager, e.Images, new CpuExecutionProviderFactory());

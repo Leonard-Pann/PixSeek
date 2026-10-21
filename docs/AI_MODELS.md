@@ -38,7 +38,9 @@ Les paramètres viennent de `visual/preprocess_cfg.json`. Catrom est l'approxima
 
 Le bouton Paramètres télécharge en streaming avec progression, fichier `.partial`, contrôle SHA-256 et renommage après validation. Il permet de recommencer après erreur et d'annuler. Un fichier présent mais corrompu n'est pas chargé. La présence et la taille servent seulement à afficher « poids présents » ; le chargement vérifie les hashes. Deux sessions CPU sont réutilisées. Le parallélisme interne est borné à huit threads maximum. Prévoir plusieurs Go de RAM libre (les poids seuls représentent environ 1,48 Go).
 
-`scripts/install-model.ps1` prépare le même ensemble dans `artifacts/models` pour les tests ou un dossier choisi avec `-Destination`. `publish-windows.ps1 -IncludeModel` permet d'embarquer les poids. Le fonctionnement hors ligne ne tente aucun accès cloud d'inférence.
+`dotnet build` et `dotnet publish` préparent automatiquement XLM-R/ViT-B/32 et les modèles faciaux, puis les copient dans `models/xlmr` et `models/faces` à côté de l'exécutable. La tâche SDK `build/ModelAssets.targets` utilise les mêmes manifestes, tailles et SHA-256. Les poids sources sont dans `models/` à la racine du dépôt, ignorés par Git. La compilation des tests prépare aussi SigLIP2, nécessaire aux tests de changement de modèle ; il reste exclu de la publication desktop par défaut.
+
+`scripts/install-model.ps1` peut aussi préparer `models/xlmr`, ou `models/siglip2` avec `-Model siglip2`. `-Destination` accepte un autre dossier explicite. À l'exécution, les paramètres téléchargent uniquement dans `<exécutable>/models/<id>` ; aucun poids n'est placé dans AppData. Le fonctionnement hors ligne ne tente aucun accès cloud d'inférence.
 
 ## Recherche sqlite-vec
 

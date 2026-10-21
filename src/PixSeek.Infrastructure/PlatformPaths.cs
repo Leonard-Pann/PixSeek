@@ -8,26 +8,21 @@ public sealed class PlatformPaths : IPlatformPaths
 {
     public string Data { get; }
     public string Cache => Path.Combine(Data, "cache");
-    public string Models => EnvironmentPath("PIXSEEK_MODEL_DIR") ?? EnvironmentPath("LUMINA_MODEL_DIR") ?? Path.Combine(Data, "models");
+    public string Models => Path.Combine(AppContext.BaseDirectory, "models");
     public string Logs => Path.Combine(Data, "logs");
     public string Native { get; }
 
     public PlatformPaths(string? data = null, string? native = null)
     {
         var user = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        data = string.IsNullOrWhiteSpace(data) ? EnvironmentPath("PIXSEEK_DATA_DIR") ?? EnvironmentPath("LUMINA_DATA_DIR") : data;
+        data = string.IsNullOrWhiteSpace(data) ? EnvironmentPath("PIXSEEK_DATA_DIR") : data;
         Data = data ?? (OperatingSystem.IsMacOS() ? Path.Combine(user, "Library", "Application Support", "PixSeek") : OperatingSystem.IsLinux() ? Path.Combine(EnvironmentPath("XDG_DATA_HOME") ?? Path.Combine(user, ".local", "share"), "PixSeek") : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "PixSeek"));
-        // Preserve libraries created by the previous build, including their absolute cache paths.
-        var legacy = Path.Combine(Path.GetDirectoryName(Data)!, "Lumina");
-        if (data == null && !Directory.Exists(Data) && Directory.Exists(legacy))
-            Data = legacy;
         var rid = $"{(OperatingSystem.IsWindows() ? "win" : OperatingSystem.IsMacOS() ? "osx" : "linux")}-{RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant()}";
         Native = native ?? Path.Combine(AppContext.BaseDirectory, "runtimes", rid, "native");
         foreach (var path in new[]
         {
             Data,
             Cache,
-            Models,
             Logs
         }
 

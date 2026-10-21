@@ -15,7 +15,6 @@
     <None Include="Localization/*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="../src/PixSeek.AI/PixSeek.AI.csproj" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
-    <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
   <ItemGroup>

@@ -35,7 +35,7 @@ public sealed class NewEngineTests(TestEnvironment environment) : IClassFixture<
     [Fact]
     public async Task Siglip2_RealOnnx_FrenchRetrieval_AndSwitchingDimensions()
     {
-        var paths = new TestPaths(environment.Paths, Path.Combine(environment.Root, "artifacts", "models"));
+        var paths = new TestPaths(environment.Paths, Path.Combine(environment.Root, "models"));
         var models = new ModelManager(paths);
         models.Select("siglip2");
         using var engine = new OnnxEmbeddingService(models, environment.Images, new CpuExecutionProviderFactory());

@@ -19,13 +19,13 @@ Les fichiers proviennent du dépôt officiel [OpenCV Zoo](https://github.com/ope
 | Détection et cinq points du visage | face_detection_yunet_2023mar.onnx | 232 589 octets | MIT |
 | Représentation faciale SFace | face_recognition_sface_2021dec.onnx | 38 696 353 octets | Apache-2.0 |
 
-Les SHA-256 et URL exacts figurent dans tools/models/faces.json. Les licences sont copiées dans licenses/YuNet-MIT.txt et licenses/SFace-Apache-2.0.txt. Les poids sont exécutés par ONNX Runtime CPU en C# ; aucune bibliothèque native OpenCV ou installation Python n'est nécessaire.
+Les SHA-256 et URL exacts figurent dans tools/models/faces.json. Les licences sont copiées dans licenses/YuNet-MIT.txt et licenses/Apache-2.0.txt. Les poids sont exécutés par ONNX Runtime CPU en C# ; aucune bibliothèque native OpenCV ou installation Python n'est nécessaire.
 
-L'archive Windows inclut les deux modèles dans models/faces. En développement :
+La compilation et la publication incluent automatiquement les deux modèles dans `models/faces`, à côté de l'exécutable. Pour les préparer manuellement dans `models/faces` à la racine du dépôt :
 
     pwsh -File scripts/install-face-models.ps1
 
-Sur Unix, utiliser scripts/install-face-models.sh. Si les poids ne sont pas disponibles, le panneau les télécharge avec progression, fichier temporaire et contrôle SHA-256 ; Annuler interrompt l'opération. La disponibilité hors ligne suit l'installation complète.
+Le mécanisme MSBuild est commun à Windows, Linux et macOS. Si les poids ne sont pas disponibles au lancement, le panneau les télécharge dans ce même dossier local avec progression, fichier temporaire et contrôle SHA-256 ; Annuler interrompt l'opération. La disponibilité hors ligne suit l'installation complète.
 
 ## Algorithme
 
@@ -40,7 +40,7 @@ Ce seuil est un choix prudent de prototype, pas une probabilité ni une preuve d
 
 ## Stockage, reprise et limites
 
-Tout reste dans les données utilisateur locales. Les photos sources restent référencées et ne sont pas modifiées. Les visages alignés de prévisualisation sont dans le cache ; Paramètres permet de vider ce cache. Retirer une personne supprime ses alias et ses références vectorielles. Retirer le dernier profil supprime aussi l'index facial dérivé ; les vignettes résiduelles restent nettoyables par le bouton de cache.
+Les personnes, alias, vecteurs de référence et observations des visages sont dans `pixseek.db`, dans les données utilisateur (`%LOCALAPPDATA%/PixSeek` sous Windows). Les modèles seuls sont dans `<exécutable>/models/faces`. Les photos sources restent référencées et ne sont pas modifiées. Les visages alignés de prévisualisation sont dans le cache ; Paramètres permet de vider ce cache. Retirer une personne supprime ses alias et ses références vectorielles. Retirer le dernier profil supprime aussi l'index facial dérivé ; les vignettes résiduelles restent nettoyables par le bouton de cache.
 
 L'indexation faciale dispose de son propre worker et de sessions CPU limitées à deux threads internes. Elle peut fonctionner en parallèle avec la galerie et l'indexation sémantique. Les mêmes signatures sont réutilisées au redémarrage et lors des réconciliations automatiques. Les fichiers modifiés sont réanalysés et les fichiers absents sont exclus des recherches.
 

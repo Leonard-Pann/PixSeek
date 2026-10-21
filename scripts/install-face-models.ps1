@@ -1,7 +1,7 @@
 param([string]$Destination)
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path $PSScriptRoot -Parent
-if (!$Destination) { $Destination = Join-Path $repo 'artifacts/models/faces' }
+if (!$Destination) { $Destination = Join-Path $repo 'models/faces' }
 $manifest = Get-Content -LiteralPath (Join-Path $repo 'tools/models/faces.json') -Raw | ConvertFrom-Json
 New-Item -ItemType Directory -Force $Destination | Out-Null
 foreach ($asset in $manifest.files) {

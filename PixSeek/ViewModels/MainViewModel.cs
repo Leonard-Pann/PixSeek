@@ -10,7 +10,7 @@ using PixSeek.Services;
 using PixSeek.Localization;
 
 namespace PixSeek.ViewModels;
-public partial class MainViewModel : ViewModelBase
+public partial class MainViewModel : ObservableObject
 {
     private readonly LibraryDatabase _db;
     private readonly LibraryIndexer _indexer;

@@ -1,28 +1,13 @@
-param([switch]$IncludeModel = $true)
 $ErrorActionPreference='Stop'
 $repo=Split-Path $PSScriptRoot -Parent
 & "$PSScriptRoot/verify-dependencies.ps1"
-& "$PSScriptRoot/install-face-models.ps1"
 $output=Join-Path $repo 'artifacts/publish/win-x64'
+$expectedOutput=[IO.Path]::GetFullPath((Join-Path $repo 'artifacts/publish/win-x64'))
+if ([IO.Path]::GetFullPath($output) -ne $expectedOutput) { throw 'Dossier de publication inattendu' }
+# This directory contains generated build output only. Start fresh so removed files never enter a release.
+if (Test-Path -LiteralPath $output) { Remove-Item -LiteralPath $output -Recurse -Force }
 dotnet publish "$repo/PixSeek.Desktop/PixSeek.Desktop.csproj" -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:PublishTrimmed=false -o $output
 if($LASTEXITCODE -ne 0){throw 'Publication échouée'}
-$facesTarget=Join-Path $output 'models/faces'
-New-Item -ItemType Directory -Force $facesTarget | Out-Null
-Copy-Item -Path "$repo/artifacts/models/faces/*.onnx" -Destination $facesTarget -Force
-# Retirer uniquement les anciens artefacts générés lors du renommage du produit.
-Get-ChildItem -LiteralPath $output -File | Where-Object {
-    $_.Name -match '^Lumina(?:\.(?:AI|Core|Infrastructure|Media))?\.(?:exe|dll|pdb|deps\.json|runtimeconfig\.json)$'
-} | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
-if($IncludeModel) {
-    & "$PSScriptRoot/install-model.ps1"
-    $modelTarget=Join-Path $output 'models/weights'
-    New-Item -ItemType Directory -Force $modelTarget | Out-Null
-    $manifest = Get-Content "$repo/tools/models/manifest.json" -Raw | ConvertFrom-Json
-    foreach ($asset in $manifest.files) {
-        $target = Join-Path $modelTarget $asset.path
-        New-Item -ItemType Directory -Force (Split-Path $target -Parent) | Out-Null
-        Copy-Item -LiteralPath (Join-Path "$repo/artifacts/models" $asset.path) -Destination $target -Force
-    }
-}
 & "$PSScriptRoot/verify-dependencies.ps1" -NativePath "$output/runtimes/win-x64/native"
+& "$PSScriptRoot/verify-release.ps1" -Path $output
 Write-Output "Publication : $output/PixSeek.exe"

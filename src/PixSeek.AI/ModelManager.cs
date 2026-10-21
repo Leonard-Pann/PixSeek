@@ -59,27 +59,18 @@ public sealed class ModelManager
         _activeId = id;
     }
 
-    private string UserPath => _activeId == DefaultId ? paths.Models : Path.Combine(paths.Models, _activeId);
-    private string BundledPath => Path.Combine(AppContext.BaseDirectory, "models", _activeId == DefaultId ? "weights" : _activeId);
-    public string DirectoryPath => PresentIn(UserPath) ? UserPath : PresentIn(BundledPath) ? BundledPath : UserPath;
+    public string DirectoryPath => Path.Combine(paths.Models, _activeId);
 
     public void Delete()
     {
-        foreach (var directory in new[]
+        var root = Path.GetFullPath(DirectoryPath);
+        foreach (var asset in Manifest.Files)
         {
-            UserPath,
-            BundledPath
-        }.Distinct())
-        {
-            var root = Path.GetFullPath(directory);
-            foreach (var asset in Manifest.Files)
-            {
-                var file = Path.GetFullPath(Path.Combine(root, asset.Path));
-                if (!file.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidDataException("Invalid model path.");
-                if (File.Exists(file))
-                    File.Delete(file);
-            }
+            var file = Path.GetFullPath(Path.Combine(root, asset.Path));
+            if (!file.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Invalid model path.");
+            if (File.Exists(file))
+                File.Delete(file);
         }
     }
 
@@ -105,19 +96,6 @@ public sealed class ModelManager
 
     public async Task DownloadAsync(IProgress<WorkProgress> progress, CancellationToken ct)
     {
-        if (!PresentIn(UserPath) && PresentIn(BundledPath))
-        {
-            try
-            {
-                await ValidateAsync(ct);
-                progress.Report(new("Modèle embarqué vérifié", Fraction: 1));
-                return;
-            }
-            catch (InvalidDataException)
-            { /* Install a repaired copy in user data without changing the bundle. */
-            }
-        }
-
         using var http = new HttpClient
         {
             Timeout = TimeSpan.FromHours(2)
@@ -126,7 +104,7 @@ public sealed class ModelManager
         long done = 0, total = Manifest.Files.Sum(f => f.Size);
         foreach (var f in Manifest.Files)
         {
-            var target = Path.Combine(UserPath, f.Path);
+            var target = Path.Combine(DirectoryPath, f.Path);
             Directory.CreateDirectory(Path.GetDirectoryName(target)!);
             if (File.Exists(target))
             {

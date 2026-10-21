@@ -23,24 +23,14 @@ public sealed class ScanTests(TestEnvironment e) : IClassFixture<TestEnvironment
     }
 
     [Fact]
-    public void BlankModelEnvironment_UsesDataDirectory()
+    public void Storage_SeparatesUserDataFromApplicationModels()
     {
-        var current = Environment.GetEnvironmentVariable("PIXSEEK_MODEL_DIR");
-        var legacy = Environment.GetEnvironmentVariable("LUMINA_MODEL_DIR");
-        try
-        {
-            Environment.SetEnvironmentVariable("PIXSEEK_MODEL_DIR", " ");
-            Environment.SetEnvironmentVariable("LUMINA_MODEL_DIR", "");
-            var data = Path.Combine(e.Work, "empty environment");
-            var paths = new PlatformPaths(data, e.Paths.Native);
-            Assert.Equal(Path.Combine(data, "models"), paths.Models);
-            Assert.True(Directory.Exists(paths.Models));
-        }
-        finally
-        {
-            Environment.SetEnvironmentVariable("PIXSEEK_MODEL_DIR", current);
-            Environment.SetEnvironmentVariable("LUMINA_MODEL_DIR", legacy);
-        }
+        var data = Path.Combine(e.Work, "user data");
+        var paths = new PlatformPaths(data, e.Paths.Native);
+        Assert.Equal(Path.Combine(AppContext.BaseDirectory, "models"), paths.Models);
+        Assert.Equal(Path.Combine(data, "cache"), paths.Cache);
+        Assert.Equal(Path.Combine(data, "pixseek.db"), new LibraryDatabase(paths).DatabasePath);
+        Assert.False(Directory.Exists(Path.Combine(data, "models")));
     }
 
     [Fact]

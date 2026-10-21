@@ -18,3 +18,14 @@ Nouveaux tests : copie de bitmap/fichier, survie après fermeture/cache, positio
 La copie est testée par aller-retour via l'API de presse-papier Avalonia Headless. Le collage dans Microsoft Teams/Discord n'a pas été automatisé et aucune publication de message externe n'a été effectuée. La reconnaissance faciale est validée sur le petit corpus documenté dans PEOPLE, pas sur une grande population ni sur les médias privés de l'utilisateur.
 
 Windows est la plateforme locale de validation. Les scripts Linux/macOS incluent le téléchargement vérifié des modèles faciaux ; leur exécution n'est pas validée ici.
+
+## Nettoyage avant publication
+
+- Stockage utilisateur exclusivement sous PixSeek : `pixseek.db` (bibliothèque, dossiers, embeddings et personnes), `settings.json`, `cache/` et `logs/`. Les reprises automatiques des profils portant un ancien nom ont été retirées ; aucune donnée AppData existante n'a été supprimée.
+- Modèles exclusivement à côté de l'exécutable : `models/xlmr`, `models/faces`, `models/siglip2`. XLM-R/ViT-B/32, YuNet et SFace sont préparés automatiquement lors du build et de la publication, avec tailles et SHA-256 épinglés. SigLIP2 est optionnel dans la release et préparé automatiquement pour les tests.
+- Retrait des projets mobiles/navigateur de template, du ViewLocator par réflexion, de la classe de ViewModel vide, de l'ancien lecteur externe et des assets/configurations sans usage. Les copies de modèles et anciens binaires générés ont été nettoyés.
+- Licences communes regroupées sans perte des attributions ; licence des images de test déplacée auprès des fixtures. Les notices ONNX et le SBOM ImageMagick restent conservés.
+- La préparation des modèles utilise un petit outil SDK dans un processus distinct : les builds successifs ne gardent pas ses assemblies verrouillés. Un verrou de fichiers protège les téléchargements lors des builds concurrents. La liste exacte des actifs des manifestes détermine les fichiers embarqués.
+- Validation locale : 38 tests réussis (`tests/PixSeek.Tests/TestResults/release-cleanup.trx`), build de la solution sans avertissement, téléchargement d'un fichier manquant, réparation d'un fichier corrompu de même taille et refus de chemins sortant du dossier de modèles. La publication est contrôlée par `scripts/verify-release.ps1` (poids/manifestes, licences, absence de données utilisateur et de SigLIP2).
+
+La publication reste locale ; aucune release GitHub ni modification distante n'est créée par ces scripts. Les obligations de redistribution des composants tiers restent décrites dans THIRD_PARTY_NOTICES.md.

@@ -28,21 +28,6 @@ public partial class App : Application
             };
             desktop.Exit += (_, _) => model.Stop();
         }
-        else if (ApplicationLifetime is IActivityApplicationLifetime singleViewFactoryApplicationLifetime)
-        {
-            singleViewFactoryApplicationLifetime.MainViewFactory = () => new MainView
-            {
-                DataContext = model
-            };
-        }
-        else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
-        {
-            singleViewPlatform.MainView = new MainView
-            {
-                DataContext = model
-            };
-        }
-
         base.OnFrameworkInitializationCompleted();
     }
 }

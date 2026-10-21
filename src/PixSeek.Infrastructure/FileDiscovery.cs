@@ -27,7 +27,7 @@ public static class FileDiscovery
 
             if (recursive)
                 foreach (var sub in Directory.EnumerateDirectories(dir, "*", options))
-                    if (!Path.GetFileName(sub).Equals(MediaFormats.OutputFolder, StringComparison.OrdinalIgnoreCase) && !Path.GetFileName(sub).Equals("Lumina Optimized", StringComparison.OrdinalIgnoreCase) && !(excludedDirectories?.Any(p => string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(p)), Path.TrimEndingDirectorySeparator(sub), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) ?? false))
+                    if (!Path.GetFileName(sub).Equals(MediaFormats.OutputFolder, StringComparison.OrdinalIgnoreCase) && !(excludedDirectories?.Any(p => string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(p)), Path.TrimEndingDirectorySeparator(sub), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) ?? false))
                         queue.Push(sub);
         }
     }

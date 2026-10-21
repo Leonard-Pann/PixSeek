@@ -25,7 +25,6 @@ public static class UiTestAppBuilder
     {
         var root = TestEnvironment.FindRoot();
         Environment.SetEnvironmentVariable("PIXSEEK_DATA_DIR", Path.Combine(root, "artifacts", "ui-smoke", Guid.NewGuid().ToString("N")));
-        Environment.SetEnvironmentVariable("PIXSEEK_MODEL_DIR", Path.Combine(root, "artifacts", "models"));
         return AppBuilder.Configure<PixSeek.App>().UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false }).WithInterFont();
     }
 }

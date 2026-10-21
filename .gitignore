@@ -61,3 +61,7 @@ runtimes/*/native/*
 runtimes/*/applocal/*.dll
 
 TestDataset
+
+# Model weights are downloaded and verified from tools/models/*.json during build.
+/models/
+*.partial

@@ -4,7 +4,7 @@ rid="${1:?RID requis : linux-x64, osx-arm64 ou osx-x64}"
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 native="$repo/runtimes/$rid/native"
 mkdir -p "$native/lib"
-tools=(ffmpeg ffprobe ffplay magick cjxl djxl)
+tools=(ffmpeg ffprobe magick cjxl djxl)
 for name in "${tools[@]}"; do
   original="$(command -v "$name")" || { echo "Outil de build manquant : $name" >&2; exit 1; }
   if [[ "$rid" == linux-* ]]; then

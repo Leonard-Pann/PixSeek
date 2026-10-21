@@ -1,0 +1,29 @@
+<Project>
+  <PropertyGroup>
+    <PixSeekRepositoryRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..'))</PixSeekRepositoryRoot>
+  </PropertyGroup>
+  <Target Name="BuildPixSeekModelTask">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)PixSeek.Build.csproj" Targets="Restore;Build"
+             RemoveProperties="RuntimeIdentifier;RuntimeIdentifiers;SelfContained;PublishDir;PublishSingleFile;PublishTrimmed;TargetFramework;OutputPath"
+             Properties="Configuration=Release" />
+  </Target>
+  <!-- Run before content discovery so the first build and first publish include newly downloaded files. -->
+  <Target Name="PreparePixSeekModels" BeforeTargets="AssignTargetPaths" DependsOnTargets="BuildPixSeekModelTask" Condition="'$(DesignTimeBuild)' != 'true'">
+    <PropertyGroup>
+      <_PixSeekAssetList>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)/$(IntermediateOutputPath)pixseek-model-assets.txt'))</_PixSeekAssetList>
+      <_PixSeekOptionalModel Condition="'$(PixSeekIncludeSiglip2)' == 'true'">siglip2</_PixSeekOptionalModel>
+    </PropertyGroup>
+    <!-- A separate SDK process releases its assemblies after each run, including when building in Visual Studio. -->
+    <Exec Command="dotnet &quot;$(MSBuildThisFileDirectory)bin/Release/net10.0/PixSeek.Build.dll&quot; &quot;$(PixSeekRepositoryRoot)&quot; &quot;$(_PixSeekAssetList)&quot; $(_PixSeekOptionalModel)" />
+    <ReadLinesFromFile File="$(_PixSeekAssetList)">
+      <Output TaskParameter="Lines" ItemName="_PixSeekModelRelativePath" />
+    </ReadLinesFromFile>
+    <ItemGroup>
+      <_PixSeekModelFile Include="@(_PixSeekModelRelativePath)">
+        <Link>models/%(Identity)</Link>
+        <SourcePath>$(PixSeekRepositoryRoot)/models/%(Identity)</SourcePath>
+      </_PixSeekModelFile>
+      <None Include="@(_PixSeekModelFile->'%(SourcePath)')" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+</Project>

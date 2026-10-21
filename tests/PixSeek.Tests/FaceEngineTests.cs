@@ -7,7 +7,7 @@ public sealed class FaceEngineTests(TestEnvironment e) : IClassFixture<TestEnvir
     [Fact]
     public async Task YuNetAndSFace_RealDetectionAndNormalizedIdentityVectors()
     {
-        var paths = new FacePaths(e.Paths, Path.Combine(e.Root, "artifacts", "models"));
+        var paths = new FacePaths(e.Paths, Path.Combine(e.Root, "models"));
         var manager = new FaceModelManager(paths);
         using var engine = new FaceEmbeddingService(manager, e.Images, paths);
         var astronaut = Path.Combine(e.Root, "tests", "fixtures", "astronaut.png");

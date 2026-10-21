@@ -1,111 +1,80 @@
 # PixSeek
 
-Application desktop multilingue de photothèque, recherche sémantique locale et optimisation de photos/vidéos. Développée directement à partir du projet **PixSeek Avalonia 12.1.1 / .NET 10** existant. Les projets métier, l'interface et l'exécutable portent le nom **PixSeek**.
+Photothèque desktop multilingue : recherche sémantique locale dans les photos et vidéos, recherche de personnes et compression. Avalonia 12.1.1 / .NET 10 ; inférence ONNX sur CPU, sans serveur.
 
-## Démarrer sous Windows 11 x64
+## Compiler sous Windows x64
 
-Le SDK .NET 10 est requis pour développer. Le bootstrap utilise aussi les DLL redistribuables MSVC 14.51.36231 de Visual Studio 2026, déjà disponibles sur la machine de développement (voir DEPENDENCIES.md). Aucun Python, serveur, Docker, outil multimédia du PATH ni installation séparée du runtime C++ n'est requis par la publication fournie, qui embarque ces DLL.
+Installer le SDK .NET 10. Le bootstrap prépare les outils natifs et les DLL redistribuables MSVC 14.51.36231 depuis Visual Studio 2026 ; voir [DEPENDENCIES.md](DEPENDENCIES.md).
 
 ```powershell
 pwsh -NoProfile -File scripts/bootstrap-windows.ps1
-dotnet restore
-dotnet build
-dotnet run --project PixSeek.Desktop
+dotnet restore PixSeek.slnx
+dotnet build PixSeek.slnx -c Release
+dotnet run --project PixSeek.Desktop -c Release --no-build
 ```
 
-En développement, dans **Settings → AI model**, télécharger le couple XLM-RoBERTa + ViT-B/32 si nécessaire (environ 1,48 Go). La publication Windows le préinstalle par défaut. Ajouter ensuite un dossier. Sans les poids, le scan et les miniatures fonctionnent ; la recherche affiche une erreur explicite. Le téléchargement utilise des URL de révision fixes et vérifie chaque SHA-256 avant validation. Après installation, l'inférence fonctionne hors ligne.
+La première compilation télécharge automatiquement XLM-RoBERTa + ViT-B/32 (environ 1,48 Go), YuNet et SFace (environ 39 Mo). Les poids sont préparés dans `models/xlmr` et `models/faces` à la racine du dépôt, vérifiés par SHA-256, puis copiés à côté de l'exécutable. Les compilations suivantes réutilisent les fichiers valides. Une connexion est nécessaire si un fichier manque ou est endommagé. Après installation complète, la recherche et la reconnaissance fonctionnent hors ligne.
 
-Pour préinstaller les poids sans passer par l'interface :
+Les poids sont ignorés par Git. Ils accompagnent les archives de release, sans entrer dans l'historique du dépôt.
 
-```powershell
-pwsh -File scripts/install-model.ps1 -Destination "$env:LOCALAPPDATA/PixSeek/models"
-```
+## Fonctionnalités
 
-Une publication autonome **avec modèle embarqué**, utilisable hors ligne dès le premier lancement, est également préparée dans `artifacts/publish/win-x64/PixSeek.exe` (environ 2,43 Gio). Elle doit être déplacée avec **tout son dossier**, pas uniquement son EXE.
+- Dossiers référencés sans déplacement des originaux, scan récursif et surveillance des changements.
+- Galerie virtualisée à défilement continu, filtres par type et dossier, sélection de médias.
+- Recherche multilingue avec XLM-R/ViT-B/32 (512 dimensions), ou SigLIP2 optionnel (768 dimensions), classement hybride avec les noms de fichiers.
+- Recherche de scènes vidéo à partir de frames réparties sur toute la durée ; ouverture au meilleur timestamp.
+- Personnes : références choisies par l'utilisateur, alias et détection/reconnaissance YuNet/SFace. [Fonctionnement détaillé](docs/PEOPLE.md).
+- Visionneuse intégrée, zoom photo et lecture vidéo LibVLC, navigation clavier, presse-papier.
+- Compression JPEG XL, PNG, AVIF et AV1/MKV, validation des sorties, sources conservées, jobs persistés.
+- Thèmes système/sombre/clair, cinq langues (anglais, français, italien, allemand, espagnol), paramètres sauvegardés automatiquement.
 
-## Fonctionnalités réellement implémentées
+Les [limites connues](docs/KNOWN_LIMITATIONS.md) précisent le périmètre et les validations. Le packaging Windows x64 est testé ; Linux/macOS restent expérimentaux.
 
-- Dossiers référencés sans déplacement des originaux ; scan récursif, sous-dossiers, réconciliation, erreurs par fichier.
-- Base SQLite locale WAL, migration versionnée, extension native sqlite-vec chargée explicitement.
-- Galerie à défilement continu, chargée par lots SQL de 240 médias ; virtualisation des lignes ; miniatures disque ; décodage à la demande de trois miniatures à la fois, libérées hors écran.
-- Photothèque au démarrage, recherche en tête, filtres automatiques par type/dossier, avec un choix explicite Tous les dossiers, sélection individuelle des médias et ajout de dossier en haut à droite.
-- Miniatures générées en parallèle, indépendamment du worker ONNX ; traitement et lectures SQL hors du thread UI.
-- Rafraîchissement incrémental pendant l'indexation : les cartes existantes, sélections et miniatures restent en place. Préparation indéterminée puis progression pondérée sur un total fixe, incluant les frames vidéo.
-- Filtres type/dossier sur toute la base avant pagination et classement vectoriel ; réparation automatique des anciennes colonnes de filtrage.
-- Recherche hybride : ONNX CPU multilingue + KNN cosine sqlite-vec ; priorité aux noms exacts, expressions complètes et ressemblances très fortes (seuil 0,84). Les ressemblances faibles ne modifient pas le classement sémantique.
-- FFprobe, extraction de frames vidéo réparties sur toute la durée, limite et intervalle réglables ; meilleur timestamp par vidéo.
-- Visionneuse photo/vidéo dans la même fenêtre : décodage Skia direct, orientation EXIF, cache de trois images, préchargement, zoom sous le curseur, déplacement et flèches clavier. Vidéo LibVLC intégrée avec format original/rotation/SAR, seek, relance après la fin, volume et sourdine, y compris au timestamp de recherche. Fond noir immédiat pendant le chargement.
-- Optimisation d'un dossier ou d'une sélection : JPEG XL, JPEG réversible si vérifié, PNG sans perte de pixels, AVIF perceptuel, AV1/MKV avec copie des pistes audio/sous-titres compatibles.
-- Panneau de compression superposé : entrée pour un dossier ou sélection depuis le clic droit, sortie personnalisable, modes Qualité/Équilibré/Meilleure compression, codecs et curseurs de qualité photo/vidéo dans les paramètres avancés.
-- Progression FFmpeg, pause entre fichiers, annulation, résultats et jobs persistés dans SQLite.
-- Sorties temporaires, décodage de validation, aucune suppression des sources, aucun écrasement, rejet par défaut des fichiers plus volumineux.
-- Thèmes système/sombre/clair, cinq langues JSON (anglais par défaut, français, italien, allemand, espagnol), sauvegarde automatique, vidage des caches et version. Diagnostics techniques disponibles uniquement via CLI/logs.
-- Réconciliation de bibliothèque au lancement et chaque minute, avec FileSystemWatcher pour réagir rapidement aux créations, modifications et suppressions. Les vecteurs des fichiers supprimés sont retirés.
+## Stockage
 
-Les limites précises sont dans [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md). Il s'agit d'un prototype utilisable, avec lecture vidéo intégrée validée sous Windows et packaging Unix expérimental.
+Les données utilisateur Windows sont dans `%LOCALAPPDATA%\PixSeek`, macOS dans `~/Library/Application Support/PixSeek`, Linux dans `$XDG_DATA_HOME/PixSeek` ou `~/.local/share/PixSeek`. `PIXSEEK_DATA_DIR` peut choisir un autre dossier de données pour les tests ou une installation portable.
 
-## Modèle et dépendances
+| Contenu | Emplacement |
+|---|---|
+| Dossiers ajoutés, médias, embeddings photos/frames vidéo, personnes/alias/références et index facial | `<données>/pixseek.db` |
+| Paramètres : thème, langue, modèle actif, échantillonnage, compression | `<données>/settings.json` |
+| Miniatures, scènes vidéo et aperçus des visages | `<données>/cache/` |
+| Journaux | `<données>/logs/` |
+| Modèles XLM-R + ViT-B/32 | `<exécutable>/models/xlmr/` |
+| Modèles YuNet et SFace | `<exécutable>/models/faces/` |
+| Modèle SigLIP2 optionnel | `<exécutable>/models/siglip2/` |
 
-Modèle : [XLM-RoBERTa Base / ViT-B-32 LAION-5B exporté par Immich](https://huggingface.co/immich-app/XLM-Roberta-Base-ViT-B-32__laion5b_s13b_b90k), révision `111f6ddca817bb6cd8343c3e3dc5ce39d9ba54b0`, 512 dimensions. Deux graphes ONNX, tokenizer Unigram XLM-R exact. SigLIP2 ViT-B/16 (768 dimensions) est téléchargeable et activable à la place, avec réindexation automatique. Détails et licence : [AI_MODELS](docs/AI_MODELS.md).
+Cette version utilise exclusivement `pixseek.db` dans le dossier de données PixSeek. Elle ne reprend pas automatiquement les profils d'une installation portant un ancien nom ; les fichiers de cette installation restent intacts. Les photos et vidéos originales restent à leur emplacement.
 
-Windows embarque FFmpeg/FFprobe/FFplay **8.1.2 Gyan GPLv3**, ImageMagick **7.1.2-34 Q16**, cjxl/djxl **0.11.1**, sqlite-vec **0.1.6**, ONNX Runtime **1.31.0**. Le délégué JXL de cette version d'ImageMagick utilise libjxl **0.12.0**. Les archives, sources et SHA-256 sont dans `tools/binaries/win-x64.lock.json`. La voie JPEG réversible utilise cjxl/djxl et compare le SHA-256 du JPEG reconstruit.
+Les modèles sont toujours locaux au logiciel. Le dossier de l'application doit être accessible en écriture pour télécharger ou supprimer un modèle depuis les paramètres. SigLIP2 reste optionnel et n'est pas inclus dans la release par défaut ; changer de modèle reconstruit l'index sémantique.
 
 ## Tests
 
 ```powershell
-pwsh -File scripts/install-model.ps1  # XLM-R dans artifacts/models
-pwsh -File scripts/install-model.ps1 -Model siglip2 # modèle alternatif testé
-dotnet test --logger trx
+# La compilation prépare automatiquement XLM-R et les modèles faciaux.
+pwsh -File scripts/install-model.ps1 -Model siglip2
+dotnet test PixSeek.slnx -c Release --logger trx
 ```
 
-La suite exécute les vrais encodeurs et ONNX. Les tests d'intégration échouent explicitement si les binaires ou modèles manquent. Elle génère ses médias de compression et utilise trois images publiques documentées dans `tests/fixtures`. Les images de rendu Headless sont écrites dans `artifacts/pixseek-*.png`. Les tests de virtualisation utilisent des lignes synthétiques identifiées comme telles ; les tests sémantiques et d'indexation utilisent de vrais médias.
+La suite utilise les vrais modèles ONNX, encodeurs multimédias et Avalonia Headless. Les médias publics sont documentés dans `tests/fixtures/README.md`. Les résultats et médias générés restent dans les dossiers ignorés par Git.
+
+Préparation manuelle des modèles, si nécessaire :
+
+```powershell
+pwsh -File scripts/install-model.ps1          # models/xlmr
+pwsh -File scripts/install-face-models.ps1    # models/faces
+# -Destination permet de préparer explicitement un autre dossier.
+```
 
 ## Publication
 
 ```powershell
 pwsh -File scripts/publish-windows.ps1
-# Le modèle XLM-R est inclus par défaut ; option explicite :
-pwsh -File scripts/publish-windows.ps1 -IncludeModel
 ```
 
-La publication est self-contained, sans AOT ni trimming. `models/weights` est utilisé s'il contient le modèle embarqué complet. Autrement, les poids sont stockés dans les données utilisateur.
+La publication autonome est produite dans `artifacts/publish/win-x64`. XLM-R/ViT-B/32, YuNet et SFace sont inclus automatiquement par le même mécanisme que `dotnet build`. Pas de trimming ni de fichier unique : déplacer et distribuer **tout le dossier**, pas seulement `PixSeek.exe`. Les données personnelles AppData ne sont pas incluses.
 
-Sous Linux/macOS, préparer les dépendances **sur la plateforme cible**, puis :
-
-```bash
-bash scripts/stage-unix.sh linux-x64
-bash scripts/publish-linux.sh
-# Sur Mac ARM64 / Intel :
-bash scripts/stage-unix.sh osx-arm64
-bash scripts/publish-macos.sh osx-arm64
-# remplacer osx-arm64 par osx-x64 sur Mac Intel
-```
-
-Voir [CROSS_PLATFORM](docs/CROSS_PLATFORM.md) pour les prérequis de build, les bibliothèques regroupées, les limites et la signature. Aucun test macOS/Linux n'a été exécuté sur la machine Windows de développement. Le workflow `.github/workflows/build.yml` prépare les jobs sur runners natifs ; il n'a pas été exécuté depuis cette session.
-
-## Organisation
-
-```text
-PixSeek/                    UI Avalonia, styles, contrôles et ViewModels
-PixSeek.Desktop/            Point d'entrée desktop et diagnostics CLI
-src/PixSeek.Core/            Contrats, modèles, formats, contrôle des jobs
-src/PixSeek.Infrastructure/  SQLite, fichiers, paramètres, chemins, logs
-src/PixSeek.Media/           Processus, miniatures, métadonnées, compression
-src/PixSeek.AI/              ONNX, modèle, tokenizer et pipeline d'indexation
-tests/PixSeek.Tests/         Tests xUnit 3, Avalonia Headless et intégration
-tests/fixtures/             Images publiques de recherche
-tools/                     Manifestes et sommes de contrôle
-runtimes/<RID>/native/      Outils et bibliothèques natifs
-scripts/                   Bootstrap, build, publication
-licenses/                  Licences tierces et SBOM ImageMagick
-docs/                      Architecture, validations et limites
-```
-
-Les anciens projets Android/iOS/Browser sont conservés sur disque mais retirés de la solution desktop. Ils ne sont ni développés ni validés et ne doivent pas référencer les exécutables desktop pour une future version mobile.
-
-Les données Windows sont dans `%LOCALAPPDATA%/PixSeek`, macOS dans `~/Library/Application Support/PixSeek`, Linux dans `$XDG_DATA_HOME/PixSeek` ou `~/.local/share/PixSeek`. Pour les tests et installations portables, `PIXSEEK_DATA_DIR` et `PIXSEEK_MODEL_DIR` permettent de changer ces emplacements.
-
-Si une ancienne installation Lumina existe déjà, son dossier de données et sa base sont réutilisés pour conserver la bibliothèque, les embeddings et les chemins du cache. Les anciens dossiers de sortie restent exclus des scans.
+Sous Linux/macOS, préparer les natifs sur la plateforme cible puis utiliser `scripts/publish-linux.sh` ou `scripts/publish-macos.sh`. Voir [CROSS_PLATFORM.md](docs/CROSS_PLATFORM.md) pour le staging, la signature et les limites.
 
 Diagnostic sans interface :
 
@@ -113,18 +82,23 @@ Diagnostic sans interface :
 ./artifacts/publish/win-x64/PixSeek.exe --diagnostics ./artifacts/diagnostics.json
 ```
 
-Les sources restent sous la licence du dépôt. Respecter les [notices tierces](THIRD_PARTY_NOTICES.md), en particulier les obligations GPL des binaires FFmpeg, avant une distribution publique.
+## Organisation
 
-## Révision 0.2.0
+```text
+PixSeek/                    Interface Avalonia, contrôles, vues et ViewModels
+PixSeek.Desktop/            Point d'entrée desktop et diagnostics CLI
+src/PixSeek.Core/           Contrats, modèles et contrôle des jobs
+src/PixSeek.Infrastructure/ SQLite, découverte, paramètres, chemins, logs
+src/PixSeek.Media/          Miniatures, métadonnées, compression
+src/PixSeek.AI/             ONNX, modèles, tokenizer, indexation sémantique/faciale
+build/                     Tâche MSBuild de préparation des modèles
+tests/                     Tests et corpus public
+tools/                     Manifestes de modèles et sommes de contrôle natives
+models/                    Poids téléchargés, ignorés par Git
+runtimes/<RID>/native/      Outils et bibliothèques natifs, ignorés par Git
+scripts/                   Bootstrap, build et publication
+licenses/                  Licences et notices des composants utilisés
+docs/                      Architecture, algorithmes, validations et limites
+```
 
-La fenêtre ouvre directement la photothèque, sans menu latéral ni filtres de dates. Le bouton des paramètres est à droite de l'ajout de dossier. Le menu contextuel propose Lire, Compresser et Ouvrir l'emplacement du fichier. La visionneuse reste dans la fenêtre principale ; Échap ou la croix revient à la galerie.
-
-Les modèles disponibles et leur installation sont gérés dans AI model / Modèle d'IA. Un seul modèle peut être actif. Pour supprimer le modèle actif, activer d'abord l'autre couple installé. Le changement reconstruit l'index ; les photos et vidéos d'origine sont conservées.
-
-Les traductions sont dans les cinq fichiers JSON de PixSeek/Localization. Les nouveaux profils démarrent en anglais ; une langue déjà enregistrée reste conservée. Les caches d'aperçus et miniatures peuvent être vidés ; les images de scènes référencées par l'index sont conservées et les miniatures nécessaires sont régénérées sans recalculer les embeddings inchangés.
-
-LibVLCSharp 3.10.2 et VideoLAN.LibVLC.Windows 3.0.23.1 sont fournis via NuGet. Aucun VLC externe n'est requis sous Windows. Voir docs/UX_UPDATE_2026-10-20.md pour les validations de cette révision.
-
-Correctifs de lecture, de filtres et de performances : [révision 0.2.1](docs/BUGFIXES_0.2.1.md).
-
-Version 0.3.0 : [nouveautés et validation](docs/RELEASE_0.3.0.md), [recherche de personnes et algorithme](docs/PEOPLE.md). Les portraits de référence et les visages reconnus restent locaux. Les rapports de compression restent dans SQLite ; aucun nouveau JSON ne pollue la sortie.
+Les projets mobiles et navigateur de template ont été retirés. Les sources du projet sont sous [MIT](LICENSE). Les composants tiers conservent leurs conditions : [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [licences conservées](licenses/README.md), [modèles IA](docs/AI_MODELS.md). Les obligations de redistribution des binaires FFmpeg/VLC restent détaillées dans les notices.

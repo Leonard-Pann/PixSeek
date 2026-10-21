@@ -1,6 +1,6 @@
 # Tests et validation
 
-Prérequis d'intégration Windows : SDK .NET 10, `scripts/bootstrap-windows.ps1`, puis `scripts/install-model.ps1`. La suite utilise xUnit **3.2.2** et Avalonia Headless **12.1.1**, alignés sur Avalonia 12.
+Prérequis d'intégration Windows : SDK .NET 10 et `scripts/bootstrap-windows.ps1`. La compilation des tests prépare automatiquement XLM-R/ViT-B/32, YuNet/SFace et SigLIP2 dans les sorties locales `models/`, avec validation SHA-256. La suite utilise xUnit **3.2.2** et Avalonia Headless **12.1.1**, alignés sur Avalonia 12.
 
 ```powershell
 dotnet restore

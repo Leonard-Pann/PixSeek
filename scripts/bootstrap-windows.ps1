@@ -18,7 +18,7 @@ foreach ($tool in $lock) {
     & tar -xf $archive -C $extracted
     if ($LASTEXITCODE -ne 0) { throw "Extraction échouée : $archive (tar Windows 11 requis)" }
     if ($tool.name -eq 'ffmpeg') {
-        Get-ChildItem $extracted -Recurse -Filter '*.exe' | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $native -Force }
+        Get-ChildItem $extracted -Recurse -File | Where-Object Name -in @('ffmpeg.exe','ffprobe.exe') | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $native -Force }
         Get-ChildItem $extracted -Recurse -File | Where-Object Name -match 'LICENSE|README' | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $native "ffmpeg-$($_.Name)") -Force }
     } elseif ($tool.name -eq 'imagemagick') {
         Get-ChildItem $extracted -Recurse -File | Where-Object { $_.Name -eq 'magick.exe' -or $_.Extension -in @('.xml','.icc','.dll','.txt','.md') } | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $native -Force }

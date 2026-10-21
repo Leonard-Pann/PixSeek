@@ -10,10 +10,7 @@ public sealed class FaceModelManager(IPlatformPaths paths)
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "models", "faces.json")),
         new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
     public string Version => Manifest.Revision + ":" + Manifest.PreprocessingVersion;
-    private string UserDirectory => Path.Combine(paths.Models, "faces");
-    private string BundledDirectory => Path.Combine(AppContext.BaseDirectory, "models", "faces");
-    public string DirectoryPath => Present(UserDirectory) ? UserDirectory : Present(BundledDirectory) ? BundledDirectory : UserDirectory;
-    private bool Present(string directory) => Manifest.Files.All(a => File.Exists(Path.Combine(directory, a.Path)) && new FileInfo(Path.Combine(directory, a.Path)).Length == a.Size);
+    public string DirectoryPath => Path.Combine(paths.Models, "faces");
     private readonly SemaphoreSlim _gate = new(1);
     private bool _validated;
 
@@ -23,7 +20,6 @@ public sealed class FaceModelManager(IPlatformPaths paths)
         try
         {
             if (_validated) return;
-            Directory.CreateDirectory(UserDirectory);
             using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
             long complete = 0, total = Manifest.Files.Sum(a => a.Size);
             foreach (var asset in Manifest.Files)
@@ -31,7 +27,7 @@ public sealed class FaceModelManager(IPlatformPaths paths)
                 var target = Path.Combine(DirectoryPath, asset.Path);
                 if (!File.Exists(target) || new FileInfo(target).Length != asset.Size)
                 {
-                    target = Path.Combine(UserDirectory, asset.Path);
+                    Directory.CreateDirectory(DirectoryPath);
                     var temporary = target + ".partial";
                     try
                     {

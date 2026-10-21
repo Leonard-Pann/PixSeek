@@ -10,15 +10,7 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
     private int _dimensions;
     public string VectorStatus { get; private set; } = "Non initialisé";
 
-    public string DatabasePath
-    {
-        get
-        {
-            var current = Path.Combine(paths.Data, "pixseek.db");
-            var legacy = Path.Combine(paths.Data, "lumina.db");
-            return !File.Exists(current) && File.Exists(legacy) ? legacy : current;
-        }
-    }
+    public string DatabasePath => Path.Combine(paths.Data, "pixseek.db");
 
     private string VecPath => Path.Combine(paths.Native, OperatingSystem.IsWindows() ? "vec0.dll" : OperatingSystem.IsMacOS() ? "vec0.dylib" : "vec0.so");
 

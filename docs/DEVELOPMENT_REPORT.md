@@ -78,7 +78,7 @@ dotnet run --project PixSeek.Desktop
 
 Pour le mode développeur, télécharger le modèle dans Paramètres ou exécuter `scripts/install-model.ps1 -Destination "$env:LOCALAPPDATA/PixSeek/models"`. La publication fournie possède déjà les poids.
 
-Publication Windows : `pwsh -File scripts/publish-windows.ps1 -IncludeModel`.
+Publication Windows : `pwsh -File scripts/publish-windows.ps1`.
 
 Sur Linux x64 : préparer les outils de build décrits dans CROSS_PLATFORM, puis `bash scripts/stage-unix.sh linux-x64` et `bash scripts/publish-linux.sh`.
 

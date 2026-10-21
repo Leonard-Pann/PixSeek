@@ -15,7 +15,7 @@ public sealed class PipelineTests(TestEnvironment e) : IClassFixture<TestEnviron
         Directory.CreateDirectory(root);
         for (var i = 0; i < 24; i++)
             File.Copy(Path.Combine(e.Root, "tests", "fixtures", "coffee.png"), Path.Combine(root, $"photo-{i}.png"));
-        var paths = new ModelPaths(e.Paths, Path.Combine(e.Root, "artifacts", "models"));
+        var paths = new ModelPaths(e.Paths, Path.Combine(e.Root, "models"));
         var manager = new ModelManager(paths);
         using var real = new OnnxEmbeddingService(manager, e.Images, new CpuExecutionProviderFactory());
         var gate = new GatedOnnx(real);
@@ -73,7 +73,7 @@ public sealed class PipelineTests(TestEnvironment e) : IClassFixture<TestEnviron
         await File.WriteAllTextAsync(Path.Combine(root, "corrompu.jpg"), "corrupt");
         var movie = Path.Combine(root, "deux scènes.mp4");
         await e.Runner.CheckedAsync(e.Tools.PathFor("ffmpeg"), ["-nostdin", "-v", "error", "-y", "-loop", "1", "-t", "1.5", "-i", cat, "-loop", "1", "-t", "1.5", "-i", astronaut, "-filter_complex", "[0:v]scale=320:240,setsar=1[a];[1:v]scale=320:240,setsar=1[b];[a][b]concat=n=2:v=1:a=0[v]", "-map", "[v]", "-r", "10", "-c:v", "libx264", "-pix_fmt", "yuv420p", movie]);
-        var paths = new ModelPaths(e.Paths, Path.Combine(e.Root, "artifacts", "models"));
+        var paths = new ModelPaths(e.Paths, Path.Combine(e.Root, "models"));
         var manager = new ModelManager(paths);
         using var embedding = new OnnxEmbeddingService(manager, e.Images, new CpuExecutionProviderFactory());
         var settings = new SettingsStore(paths);

@@ -6,7 +6,7 @@ Les versions NuGet directes sont centralisées dans `Directory.Packages.props`. 
 
 Source de vérité : `tools/binaries/win-x64.lock.json`.
 
-- FFmpeg 8.1.2 full_build : https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-full_build.7z ; SHA-256 `0fff188997a499b5382e0f66e845d4556c48c54f0113ebed4853d556dbdd7059`. Build GPLv3, statique, configuration complète dans son README copié en publication. FFprobe/FFplay proviennent de la même archive.
+- FFmpeg 8.1.2 full_build : https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-8.1.2-full_build.7z ; SHA-256 `0fff188997a499b5382e0f66e845d4556c48c54f0113ebed4853d556dbdd7059`. Build GPLv3, statique, configuration complète dans son README copié en publication. FFprobe provient de la même archive.
 - ImageMagick 7.1.2-34 portable Q16 x64 : release officielle GitHub, SHA-256 `52cc6a441c7884f5ff4274b410c9b90c4b7d54245dcdf4d32988bb4e4df4e5d1`, SBOM officiel dans `licenses/ImageMagick-SBOM.json`.
 - sqlite-vec 0.1.6 windows-x86_64 : release officielle asg017, SHA-256 `f1c615577ad2e692d1e2fe046fe65994dafd8a8cae43e9e864f5f682dc295964` vérifié à partir du fichier checksums amont conservé.
 - libjxl 0.11.1 Windows static : release officielle, SHA-256 calculé lors du téléchargement puis épinglé `8f53ebce91820c30c9fc9294f06380213c1e2e66b361718880580246b2be008e`. Pas de prétention à un hash signé publié par l'éditeur pour cette archive.
@@ -35,6 +35,6 @@ sqlite-vec et ImageMagick source Linux sont épinglés avec SHA-256. Les autres 
 
 LibVLCSharp 3.10.2 et le SDK natif VideoLAN.LibVLC.Windows 3.0.23.1 sont verrouillés via NuGet et packages.lock.json (content hashes). Les sources et licences sont référencées dans THIRD_PARTY_NOTICES. Les builds Windows AnyCPU du prototype embarquent seulement les natifs x64 ; une publication win-arm64 sélectionne ceux d'ARM64 mais n'est pas validée ici.
 
-SigLIP2 est épinglé indépendamment dans tools/models/siglip2.json. Le script install-model accepte -Model xlmr ou -Model siglip2. La publication Windows inclut XLM-R par défaut et ne copie que les actifs de son manifeste, pour éviter d'embarquer involontairement tous les modèles de test.
+SigLIP2 est épinglé indépendamment dans tools/models/siglip2.json. Le script install-model accepte -Model xlmr ou -Model siglip2. La compilation et la publication desktop incluent XLM-R et les modèles faciaux par défaut et ne copient que les actifs de leurs manifestes, pour éviter d'embarquer involontairement tous les modèles de test.
 
 Modèles faciaux 0.3.0 : OpenCV Zoo YuNet 2023mar (232 589 octets, MIT) et SFace 2021dec (38 696 353 octets, Apache-2.0 publiée). Révision, SHA-256 et URL : tools/models/faces.json. Installation : scripts/install-face-models.ps1 ou .sh. Publication dans models/faces ; fonctionnement via ONNX Runtime déjà embarqué, sans DLL OpenCV supplémentaire. Voir docs/PEOPLE.md.
