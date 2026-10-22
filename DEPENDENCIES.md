@@ -29,7 +29,7 @@ Avant diffusion publique, compléter les sources correspondantes et obligations 
 
 ## Unix
 
-sqlite-vec et ImageMagick source Linux sont épinglés avec SHA-256. Les autres outils sont préparés avec apt/Homebrew sur les runners natifs et leurs versions enregistrées. Leur verrouillage exhaustif n'est pas réalisé ; les artefacts Unix sont expérimentaux et non validés dans cette session Windows. Voir CROSS_PLATFORM.
+Les trois verrous tools/binaries/linux-x64.lock.json, osx-arm64.lock.json et osx-x64.lock.json épinglent maintenant tous les paquets natifs avec URL, version, licence et SHA-256. FFmpeg 8.1.2, ImageMagick 7.1.2-31 et libjxl 0.12.0 proviennent de conda-forge ; LibVLC 3.0.23 provient de Debian/VideoLAN. La compilation et la fermeture de dépendances sont vérifiées depuis Windows, mais pas leur exécution sur Unix. Voir docs/UNIX_RELEASES_0.3.1.md et docs/CROSS_PLATFORM.md.
 
 ## Ajouts 0.2.0
 

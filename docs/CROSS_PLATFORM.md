@@ -1,47 +1,38 @@
 # Plateformes et packaging
 
-| RID | État de validation |
-|---|---|
-| win-x64 | Build, tests, lancement natif et publication self-contained exécutés sous Windows 11 |
-| osx-arm64 / osx-x64 | Architecture et scripts de staging/bundle écrits ; non exécutés |
-| linux-x64 | Staging des bibliothèques et script de publication écrits ; non exécutés |
-| win-arm64 / linux-arm64 | Architecture prévue ; pas de bootstrap ni validation |
-| Android / iOS | Hors périmètre ; modèles métier réutilisables, adaptateurs natifs nécessaires |
+| RID | Compilation / publication locale | Exécution native |
+|---|---|---|
+| win-x64 | Réussie, avec tests et publication autonome | Fenêtre et diagnostics exécutés sous Windows 11 |
+| linux-x64 | Release autonome compilée depuis Windows ; dépendances ELF et modèles vérifiés | À essayer sur Linux |
+| osx-arm64 | Bundle Release compilé depuis Windows ; dépendances Mach-O ARM64 et modèles vérifiés | Non exécuté sur Mac |
+| osx-x64 | Bundle Release compilé depuis Windows ; dépendances Mach-O x64 et modèles vérifiés | Non exécuté sur Mac |
+| win-arm64 / linux-arm64 | Architecture prévue, sans release validée | Non exécuté |
+| Android / iOS | Hors périmètre, adaptateurs natifs nécessaires | Non développé |
+
+Les commandes exactes, prérequis système et résultats sont dans [UNIX_RELEASES_0.3.1.md](UNIX_RELEASES_0.3.1.md).
 
 ## Windows
 
-`bootstrap-windows.ps1` télécharge des versions fixes via HTTPS, vérifie SHA-256 puis extrait par le `tar` de Windows 11. Il ne dépend ni du PATH de FFmpeg ni d'une installation ImageMagick. `win-x64.lock.json` épingle les origines ; le hash libjxl est calculé lors de la récupération de l'archive amont puis épinglé, les autres sont fournis par leurs éditeurs/distributeurs.
+Le bootstrap Windows vérifie les versions et SHA-256 épinglés dans tools/binaries/win-x64.lock.json. Les DLL redistribuables Microsoft C++ 14.51.36231 sont déployées localement via stage-windows-crt.ps1. La version utilise les outils natifs embarqués, sans PATH à configurer. Voir DEPENDENCIES.md.
 
-`publish-windows.ps1` inclut les outils, configurations ImageMagick, sqlite-vec, ONNX Runtime, moteur tokenizer natif, bibliothèques SQLite et runtime .NET. Aucun fichier du projet n'est recherché au runtime en dehors des ressources publiées et données utilisateur. La publication est un dossier portable ; aucun installateur MSIX n'est fourni. Les binaires statiques Gyan sont volumineux. Une installation du SDK est nécessaire uniquement pour compiler.
+Le diagnostic a réellement chargé le modèle CPU et produit un vecteur normalisé de 512 dimensions. Le lancement/arrêt natif a été contrôlé ; cela ne remplace pas un essai sur une VM vierge.
 
-Le runtime Microsoft C++ CRT/OpenMP 14.51.36231 est déployé localement avec les binaires ; il n'est pas demandé à l'utilisateur final. Pour le préparer, le build utilise les fichiers redistribuables de Visual Studio 2026 via `stage-windows-crt.ps1`, avec hashes épinglés. Un runner dépourvu de cette version doit être préparé avant le bootstrap ; il ne faut pas remplacer silencieusement les fichiers par une version plus ancienne.
+## Linux et macOS
 
-Le diagnostic publié a réellement chargé le modèle et obtenu un vecteur normalisé de 512 dimensions. Le lancement de la fenêtre a été contrôlé dans cette session. Cela ne remplace pas un essai sur une VM Windows vierge sans Visual Studio/redistribuables : ce dernier n'a pas été exécuté.
+La préparation actuelle remplace les anciens assemblages apt/Homebrew non épinglés par scripts/bootstrap-unix.ps1. Les trois verrous tools/binaries/<RID>.lock.json listent les URL, versions, builds, licences et SHA-256 de chaque paquet. Le script peut fonctionner depuis Windows avec 7-Zip, ou sur Unix avec 7zz ; les outils de préparation ne sont pas requis par l'utilisateur final.
 
-## macOS
+Les natifs ImageMagick, libjxl et FFmpeg proviennent de conda-forge. Le SDK LibVLC Mac est extrait de l'archive officielle VideoLAN, séparément pour chaque architecture. Linux utilise les paquets Debian 12 LibVLC 3.0.23 et une fermeture de dépendances déterminée depuis les DT_NEEDED des bibliothèques/plugins conservés. Les composants d'interface graphique VLC/Sparkle/Growl sont exclus ; PixSeek rend les frames lui-même. sqlite-vec est fourni par une archive officielle par RID. ONNX/Skia/SQLite/tokenizer proviennent des actifs NuGet de la cible.
 
-Sur un runner ou Mac de même architecture : installer le SDK .NET 10 puis les outils **de build** via `brew install ffmpeg imagemagick jpeg-xl dylibbundler`. Exécuter le staging puis la publication comme indiqué au README.
+Les chemins sont relatifs à AppContext.BaseDirectory ; le lanceur détermine son dossier sans dépendre du répertoire courant. Les outils média ont leur propre environnement de chargement. Sur Linux, les bibliothèques graphiques de l'hôte sont prioritaires pour éviter une substitution GTK/GL par une version de repli.
 
-`stage-unix.sh` copie les exécutables et utilise dylibbundler pour copier la fermeture des dépendances Mach-O et réécrire les références relatives. `publish-macos.sh` fabrique `PixSeek.app`, conserve les ressources à côté du point d'entrée (chemins basés sur `AppContext.BaseDirectory`) et effectue une signature ad hoc. Une vraie distribution doit signer les composants imbriqués avec Developer ID, les bonnes entitlements .NET/Avalonia, activer le hardened runtime, notariser via `notarytool`, puis agrafer le ticket. Le script ne prétend pas accomplir cette validation Apple.
+Les données personnelles restent dans les emplacements utilisateur : LOCALAPPDATA/PixSeek, XDG_DATA_HOME/PixSeek ou ~/.local/share/PixSeek, et ~/Library/Application Support/PixSeek. Les modèles par défaut sont livrés dans l'application. Le téléchargement/suppression des modèles optionnels requiert actuellement un dossier applicatif accessible en écriture, comme indiqué dans README.
 
-Homebrew est requis pour préparer ce build, pas pour l'usage final visé. Les formules de build Homebrew ne sont pas entièrement épinglées dans ce prototype ; les versions sont enregistrées dans `build-packages.txt`. Leur reproductibilité et la fermeture des modules/délégués ImageMagick restent à vérifier sur Mac. Les artefacts CI portent le suffixe experimental.
+Les archives .tar.gz conservent les permissions exécutables et dédupliquent les copies identiques par liens physiques. La publication ne contient aucun PDB/DBG/MDB, binaire Windows ou SDK de compilation. Les manifests JSON et configurations XML utiles au runtime sont conservés.
 
-## Linux
+## Limites et validation
 
-Le staging Linux nécessite FFmpeg, ImageMagick et les bibliothèques de développement sur le poste de compilation. `ldd` sert à copier leurs dépendances hors glibc/loader ; des petits lanceurs positionnent `LD_LIBRARY_PATH` pour ces outils seulement. Les exécutables doivent conserver le droit `+x`. Pas de contournement par Docker au runtime.
+Linux vise glibc >= 2.36 avec un desktop compatible Avalonia, ICU et les bibliothèques graphiques usuelles ; ni musl/Alpine, ni toutes les distributions anciennes ne sont couverts. Les extensions natives ne sont jamais substituées par une DLL Windows.
 
-Le paquet vise au minimum la compatibilité glibc du runner (Ubuntu 24.04) ; il n'est pas annoncé compatible avec toutes les distributions. L'interface Avalonia nécessite le serveur graphique et des bibliothèques système usuelles (X11/Wayland selon backend, fontconfig, libICE, libSM, libX11 et les dépendances du backend). AppImage/Flatpak ne sont pas produits. Les packages apt de build sont enregistrés mais pas verrouillés à un snapshot ; le packaging final reproductible reste à compléter.
+Les bundles Mac ciblent macOS 15 ou ultérieur. La compilation depuis Windows ne fournit pas de signature Developer ID ni de notarisation Apple. Les étapes de distribution Apple devront être exécutées sur Mac avec les identifiants appropriés ; aucune validation Gatekeeper n'est revendiquée ici.
 
-## CI et contrôle des natifs
-
-Le dépôt ne fournit actuellement pas de workflow GitHub Actions. Les scripts doivent être exécutés sur des runners natifs avant d'automatiser une release : suite complète sous Windows ; compilation, diagnostic et essais graphiques propres à chaque plateforme Unix. Aucun résultat de CI distante n'est revendiqué.
-
-Les archives sqlite-vec sont propres à chaque architecture et leurs hashes sont épinglés. ONNX Runtime et le tokenizer sont obtenus via NuGet avec leurs actifs RID. Un binaire Windows n'est jamais utilisé pour un autre OS. L'absence d'une extension ou d'un codec reste une erreur explicite, pas une fonctionnalité simulée.
-
-## LibVLC intégré depuis 0.2.0
-
-Windows : LibVLCSharp 3.10.2 + VideoLAN.LibVLC.Windows 3.0.23.1 via NuGet. Les fichiers x64 de libvlc et plugins sont copiés sous libvlc/win-x64. Les architectures x86 et ARM64 inutiles ne sont pas copiées dans la publication x64. Le player est chargé à partir des fichiers publiés, sans VLC installé.
-
-Unix : préparer le SDK LibVLC et plugins sur le runner (Linux : libvlc-dev, vlc-plugin-base, pkg-config ; Mac : VLC.app de la bonne architecture et dylibbundler). stage-unix.sh appelle stage-vlc-unix.sh, qui rassemble le moteur, les modules et bibliothèques sous runtimes/<RID>/native/vlc. wrap-unix-player.sh place un lanceur relatif devant l'apphost et définit les chemins du loader et des plugins ; publish-linux.sh et publish-macos.sh l'appellent. Le code charge explicitement ce répertoire quand il est présent.
-
-Cette nouvelle voie Unix est une stratégie de packaging non exécutée sur la machine Windows. La fermeture des dépendances, les modules audio, la signature du bundle et les chemins dyld doivent être validés sur runners natifs ; aucun succès Mac/Linux n'est revendiqué pour cette révision.
+La CI native est définie dans .github/workflows/unix-release.yml : Ubuntu 24.04, macOS 15 ARM64 et macos-15-intel. Elle contrôle le diagnostic du paquet sur le bon OS et publie des artefacts Actions. Elle n'a pas été exécutée à distance pendant cette session ; aucun push ni release GitHub n'a été effectué.

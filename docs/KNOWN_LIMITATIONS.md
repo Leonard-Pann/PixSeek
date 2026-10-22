@@ -19,7 +19,7 @@
 - **Métadonnées** : dimensions, durée, codec, alpha/frames, dates de modification. Extraction/chronologie complètes EXIF/GPS/orientation/identité de fichier et recherche de doublons restent à enrichir. La vérification des métadonnées de conversion porte sur les informations critiques décrites dans COMPRESSION.
 - **Cache** : disque invalidé par signature, décodage visible borné et méthode de nettoyage présente. Pas encore d'interface complète de quota ni de nettoyage automatique tenant compte de toutes les références de frames.
 - **Paramètres** : thème, bibliothèque, modèle, intervalle/plafond vidéo et options de compression persistent. Cinq langues JSON sont disponibles et enregistrées automatiquement. Le choix du cache/quota depuis l'UI et des paramètres de compression additionnels restent à développer.
-- **Packaging Unix** : scripts et CI présents ; non exécutés et dépendances de build apt/Homebrew partiellement non épinglées. Fermeture des modules ImageMagick, signature macOS et compatibilité graphique à valider sur place.
+- **Packaging Unix** : les trois publications Release sont compilées depuis Windows, avec dépendances natives verrouillées et vérification statique de fermeture/architecture. Aucun lancement Linux/Mac exécuté ici. Les sélecteurs natifs, la lecture audio/vidéo et la compatibilité graphique devront être essayés sur ces systèmes ; signature Developer ID/notarisation Mac absentes des builds Windows. Voir UNIX_RELEASES_0.3.1.md.
 
 ## Non implémenté
 
@@ -44,7 +44,7 @@ Les aperçus photo sont bornés à 4 096 pixels et trois bitmaps en cache. Les c
 
 Le modèle actif ne se supprime pas pendant son utilisation ; sélectionner d'abord l'autre modèle installé. Une installation dans un répertoire protégé peut également empêcher la suppression des poids embarqués et produit alors une erreur explicite.
 
-Les nouvelles dépendances VLC Unix nécessitent le SDK/plugins sur le runner de build, puis scripts/stage-vlc-unix.sh. Les scripts ont une stratégie de regroupement et des lanceurs relatifs, mais leur exécution et la fermeture des bibliothèques natives sur Mac/Linux restent non validées ici. Certaines erreurs techniques des outils natifs restent dans leur langue d'origine ; les textes courants de l'interface utilisent les JSON.
+Les dépendances VLC Unix sont préparées depuis les verrous Debian/VideoLAN, sans installation séparée de VLC. Leur architecture et fermeture statique sont contrôlées ; le lancement, les périphériques audio et les sélecteurs natifs restent à vérifier sur Linux/Mac. Certaines erreurs techniques des outils natifs restent dans leur langue d'origine ; les textes courants de l'interface utilisent les JSON.
 
 Depuis 0.3.0, les personnes dans les photos peuvent être retrouvées avec YuNet/SFace et des références choisies par l'utilisateur. Le corpus de validation est petit, le seuil conservateur et les erreurs restent possibles. Voir PEOPLE.md. Le collage dans Teams/Discord n'a pas été automatisé ; les formats image/fichier sont testés via le presse-papier Avalonia.
 

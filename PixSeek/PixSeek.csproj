@@ -12,7 +12,7 @@
     <AvaloniaResource Include="Assets/**" />
     <PackageReference Include="LibVLCSharp" />
     <PackageReference Include="Avalonia.Skia" />
-    <PackageReference Include="VideoLAN.LibVLC.Windows" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))" />
     <None Include="Localization/*.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="../src/PixSeek.AI/PixSeek.AI.csproj" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" />

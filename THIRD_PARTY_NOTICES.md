@@ -35,3 +35,11 @@ Corpus de tests scikit-image v0.19.3 : `chelsea.png` (Stefan van der Walt, CC0),
 - YuNet face_detection_yunet_2023mar.onnx : OpenCV Zoo, révision 48b10fa505aeb51fbd127fc60a5c660040e823b7, licence MIT (Shiqi Yu), licenses/YuNet-MIT.txt.
 - SFace face_recognition_sface_2021dec.onnx : même dépôt/révision, licence Apache-2.0 publiée avec le modèle, licenses/Apache-2.0.txt. Empreintes et tailles : tools/models/faces.json. Provenance et limites : docs/PEOPLE.md.
 - Portrait de Neil Armstrong, NASA S69-31741, domaine public : https://commons.wikimedia.org/wiki/File:Neil_Armstrong_pose.jpg ; copie de test réduite dans tests/fixtures/neil-armstrong.jpg, aucune affiliation NASA suggérée.
+
+## Distributions Unix 0.3.1
+
+Les paquets Linux/macOS ajoutent des binaires conda-forge : FFmpeg/FFprobe 8.1.2 (variante GPL), ImageMagick 7.1.2-31, libjxl/cjxl/djxl 0.12.0 et leurs dépendances transitives. Chaque distribution conserve son verrou exact et les licences/métadonnées de paquets dans runtimes/<RID>/native/licenses/conda. Les recettes et sources amont sont disponibles dans les feedstocks officiels https://github.com/conda-forge/ffmpeg-feedstock, https://github.com/conda-forge/imagemagick-feedstock et https://github.com/conda-forge/libjxl-feedstock ; le verrou identifie chaque archive source de paquet binaire par SHA-256.
+
+LibVLC Linux est 3.0.23-0+deb12u1 (Debian), avec les copyrights des paquets embarqués sous native/licenses/debian. Sources Debian : https://sources.debian.org/src/vlc/ et https://deb.debian.org/debian/pool/main/v/vlc/. Le SDK macOS 3.0.23 est extrait de https://download.videolan.org/pub/videolan/vlc/3.0.23/macosx/ (hash officiel vérifié) ; source VLC : https://download.videolan.org/pub/videolan/vlc/3.0.23/vlc-3.0.23.tar.xz. Les composants gardent leurs conditions propres ; les remarques précédentes sur les sources correspondantes et la redistribution s'appliquent aussi aux artefacts Unix.
+
+Les outils de build 7-Zip 25.01 (LGPL et licences de ses composants) et micromamba 2.9.0 (BSD-3-Clause) servent uniquement à la préparation, ne sont pas distribués avec PixSeek et ne sont pas nécessaires à son exécution. Aucun interpréteur Python ou JavaScript n'est embarqué pour exécuter l'application.

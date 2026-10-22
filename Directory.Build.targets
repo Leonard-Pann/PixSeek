@@ -1,0 +1,8 @@
+<Project>
+  <!-- Some native/NuGet dependencies supply symbols independently of DebugType. -->
+  <Target Name="ExcludePixSeekReleaseSymbols" AfterTargets="ComputeFilesToPublish" Condition="'$(Configuration)' == 'Release'">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.Extension)' == '.pdb' or '%(ResolvedFileToPublish.Extension)' == '.dbg' or '%(ResolvedFileToPublish.Extension)' == '.mdb'" />
+    </ItemGroup>
+  </Target>
+</Project>

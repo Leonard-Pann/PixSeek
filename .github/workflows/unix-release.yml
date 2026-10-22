@@ -1,0 +1,58 @@
+name: Unix release
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            runner: ubuntu-24.04
+          - rid: osx-arm64
+            runner: macos-15
+          - rid: osx-x64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Linux build tools and GUI dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y 7zip libx11-6 libice6 libsm6 libfontconfig1 libgtk-3-0t64 libicu74
+      - name: macOS build tools
+        if: runner.os == 'macOS'
+        run: brew install sevenzip
+      - uses: actions/cache@v4
+        with:
+          path: |
+            models
+            artifacts/cross-build/downloads
+          key: unix-assets-${{ matrix.rid }}-${{ hashFiles('tools/models/*.json', 'tools/binaries/*.lock.json') }}
+      - name: Publish, verify native dependencies and package
+        shell: pwsh
+        env:
+          PIXSEEK_DATA_DIR: ${{ runner.temp }}/pixseek-validation
+        run: ./scripts/publish-unix.ps1 -Rid ${{ matrix.rid }}
+      - name: Packaging unit checks
+        shell: pwsh
+        run: dotnet tools/PixSeek.Packaging/bin/Release/net10.0/PixSeek.Packaging.dll self-test artifacts/packaging-selftest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PixSeek-${{ matrix.rid }}
+          compression-level: 0
+          if-no-files-found: error
+          path: |
+            artifacts/releases/*.tar.gz
+            artifacts/releases/*.sha256
+            artifacts/*-release-validation.json
+            artifacts/*-diagnostics.json

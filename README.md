@@ -76,7 +76,7 @@ pwsh -File scripts/publish-windows.ps1
 
 La publication autonome est produite dans `artifacts/publish/win-x64`. XLM-R/ViT-B/32, YuNet et SFace sont inclus automatiquement par le même mécanisme que `dotnet build`. Pas de trimming ni de fichier unique : déplacer et distribuer **tout le dossier**, pas seulement `PixSeek.exe`. Les données personnelles AppData ne sont pas incluses.
 
-Sous Linux/macOS, préparer les natifs sur la plateforme cible puis utiliser `scripts/publish-linux.sh` ou `scripts/publish-macos.sh`. Voir [CROSS_PLATFORM.md](docs/CROSS_PLATFORM.md) pour le staging, la signature et les limites.
+Les archives Linux x64, macOS ARM64 et macOS x64 sont générées dans artifacts/releases, sans symboles debug et avec leurs dépendances natives/modèles. Depuis Windows : pwsh -File scripts/prepare-packaging-tools.ps1 puis pwsh -File scripts/publish-unix.ps1 -Rid linux-x64 (ou osx-arm64/osx-x64). Sur la plateforme cible, utiliser `scripts/publish-linux.sh` ou `scripts/publish-macos.sh`. Voir [CROSS_PLATFORM.md](docs/CROSS_PLATFORM.md) pour la préparation, la signature et les limites. Voir aussi [les instructions Linux/Mac](docs/UNIX_RELEASES_0.3.1.md). La compilation croisée a été vérifiée ; le lancement natif Linux/Mac reste à tester.
 
 Diagnostic sans interface :
 

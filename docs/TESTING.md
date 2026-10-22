@@ -69,3 +69,7 @@ La suite ajoute la sélection globale sur 3200 fiches, la pagination de 260 corr
 Commande : dotnet test tests/PixSeek.Tests/PixSeek.Tests.csproj --logger "trx;LogFileName=pixseek-0.3.1.trx"
 
 Le test OpeningBenchmark produit artifacts/opening-performance-0.3.1.json sur JPEG/PNG/WebP/JPEG XL de 12 MP et vidéo H.264 locale. Ce n'est pas une mesure de tout le corpus privé ; les durées varient selon le stockage et la charge. Voir RELEASE_0.3.1.md pour les résultats observés.
+
+## Packaging Unix
+
+Les publications linux-x64, osx-arm64 et osx-x64 sont compilées depuis Windows et inspectées (ELF/Mach-O, architecture, dépendances requises, modèles SHA-256, absence de PDB/EXE Windows). Les tests du packager vérifient permissions Unix, déduplication et sécurité des chemins ; les tar finaux sont relus. La suite Windows Release reste verte : 44 tests, rapport unix-packaging-regression.trx. Aucun lancement Linux/Mac n'est revendiqué. Voir UNIX_RELEASES_0.3.1.md.
