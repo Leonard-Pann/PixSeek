@@ -366,12 +366,20 @@
         "dependencies": {
           "Microsoft.ML.OnnxRuntime": "[1.31.0, )",
           "PixSeek.Core": "[0.3.1, )",
+          "PixSeek.Inference": "[0.3.1, )",
           "PixSeek.Media": "[0.3.1, )",
           "Tokenizers.HuggingFace": "[3.23.1, )"
         }
       },
       "pixseek.core": {
         "type": "Project"
+      },
+      "pixseek.inference": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime": "[1.31.0, )",
+          "PixSeek.Infrastructure": "[0.3.1, )"
+        }
       },
       "pixseek.infrastructure": {
         "type": "Project",
@@ -387,6 +395,17 @@
           "Microsoft.Extensions.Logging": "[10.0.13, )",
           "PixSeek.Core": "[0.3.1, )",
           "PixSeek.Infrastructure": "[0.3.1, )"
+        }
+      },
+      "pixseek.mobile": {
+        "type": "Project",
+        "dependencies": {
+          "Avalonia": "[12.1.1, )",
+          "Avalonia.Fonts.Inter": "[12.1.1, )",
+          "Avalonia.Themes.Fluent": "[12.1.1, )",
+          "CommunityToolkit.Mvvm": "[8.4.2, )",
+          "Microsoft.ML.Tokenizers": "[2.0.1, )",
+          "PixSeek.Inference": "[0.3.1, )"
         }
       },
       "PixSeek.UI": {
@@ -493,6 +512,15 @@
         "contentHash": "7v58S0xqY1ZmLui5BnK3FQEWagRhmhkR/9yLrxF5rQGppGfcMaw7W0a2wgT1SWnT6ug0dmr1B2I4VWhlY/yvng==",
         "dependencies": {
           "Microsoft.ML.OnnxRuntime.Managed": "1.31.0"
+        }
+      },
+      "Microsoft.ML.Tokenizers": {
+        "type": "CentralTransitive",
+        "requested": "[2.0.1, )",
+        "resolved": "2.0.1",
+        "contentHash": "RZN3zslVWinBCMDAnbZWEY8lQbMkP54Yxm1s5NigPcrvYFzXMrDjNcVM9afq4SZHf1BV1rEmO0p7ZdfBLDbu4g==",
+        "dependencies": {
+          "Google.Protobuf": "3.30.2"
         }
       },
       "Tokenizers.HuggingFace": {

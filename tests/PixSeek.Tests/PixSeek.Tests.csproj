@@ -7,5 +7,6 @@
   <ItemGroup><None Include="../../runtimes/$(NETCoreSdkRuntimeIdentifier)/native/**/*" Link="runtimes/$(NETCoreSdkRuntimeIdentifier)/native/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
   <ItemGroup><None Include="../../runtimes/win-x64/applocal/*.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
   <ItemGroup><PackageReference Include="Avalonia.Headless.XUnit" /><PackageReference Include="Avalonia.Skia" /><ProjectReference Include="../../PixSeek/PixSeek.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../src/PixSeek.Mobile/PixSeek.Mobile.csproj" /></ItemGroup>
   <Import Project="../../build/ModelAssets.targets" />
 </Project>

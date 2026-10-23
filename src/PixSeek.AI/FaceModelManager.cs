@@ -7,7 +7,7 @@ namespace PixSeek.AI;
 public sealed class FaceModelManager(IPlatformPaths paths)
 {
     public ModelManifest Manifest { get; } = JsonSerializer.Deserialize<ModelManifest>(
-        File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "models", "faces.json")),
+        File.ReadAllText(File.Exists(Path.Combine(paths.Models, "faces.json")) ? Path.Combine(paths.Models, "faces.json") : Path.Combine(AppContext.BaseDirectory, "models", "faces.json")),
         new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
     public string Version => Manifest.Revision + ":" + Manifest.PreprocessingVersion;
     public string DirectoryPath => Path.Combine(paths.Models, "faces");

@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-android36.0</TargetFramework>
+    <SupportedOSPlatformVersion>28</SupportedOSPlatformVersion>
+    <OutputType>Exe</OutputType>
+    <ApplicationId>app.pixseek.mobile</ApplicationId>
+    <ApplicationTitle>PixSeek</ApplicationTitle>
+    <ApplicationVersion>302</ApplicationVersion>
+    <ApplicationDisplayVersion>0.3.2</ApplicationDisplayVersion>
+    <RuntimeIdentifiers>android-arm64;android-arm;android-x64;android-x86</RuntimeIdentifiers>
+    <AndroidPackageFormats>apk</AndroidPackageFormats>
+    <AndroidUseAssemblyStore>true</AndroidUseAssemblyStore>
+    <EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+    <PublishTrimmed>false</PublishTrimmed>
+    <RunAOTCompilation>false</RunAOTCompilation>
+    <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
+    <AndroidEnableSGenConcurrent>true</AndroidEnableSGenConcurrent>
+    <AndroidCreatePackagePerAbi>false</AndroidCreatePackagePerAbi>
+    <AndroidStripNativeLibraries>true</AndroidStripNativeLibraries>
+    <!-- .NET Android 36.1.69 marshal-method registration fails for generic Application bases. -->
+    <AndroidEnableMarshalMethods>false</AndroidEnableMarshalMethods>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../src/PixSeek.Mobile/PixSeek.Mobile.csproj" />
+    <PackageReference Include="Avalonia.Android" />
+    <!-- Direct reference selects the Android AAR; the shared AI project remains desktop-neutral. -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
+    <AndroidNativeLibrary Include="../runtimes/android/arm64-v8a/libvec0.so" Abi="arm64-v8a" />
+    <AndroidNativeLibrary Include="../runtimes/android/armeabi-v7a/libvec0.so" Abi="armeabi-v7a" />
+    <AndroidNativeLibrary Include="../runtimes/android/x86_64/libvec0.so" Abi="x86_64" />
+    <AndroidNativeLibrary Include="../runtimes/android/x86/libvec0.so" Abi="x86" />
+    <AndroidAsset Include="../artifacts/android/assets/**/*" Link="%(RecursiveDir)%(Filename)%(Extension)" />
+    <AndroidResource Include="../PixSeek/Assets/PixSeek.png" Link="Resources/drawable/pixseek.png" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PixSeek.Infrastructure/PixSeek.Infrastructure.csproj" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" />
+    <Compile Include="../PixSeek.AI/ModelManager.cs" Link="ModelManager.cs" />
+    <Compile Include="../PixSeek.AI/FaceModelManager.cs" Link="FaceModelManager.cs" />
+    <Compile Include="../PixSeek.AI/FaceEmbeddingService.cs" Link="FaceEmbeddingService.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../PixSeek.Inference/PixSeek.Inference.csproj" />
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Microsoft.ML.Tokenizers" />
+    <AvaloniaResource Include="../../PixSeek/Assets/PixSeek.png" Link="Assets/PixSeek.png" />
+    <EmbeddedResource Include="../../PixSeek/Localization/*.json" LogicalName="PixSeek.Mobile.DesktopLocalization.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Localization/*.json" />
+  </ItemGroup>
+</Project>

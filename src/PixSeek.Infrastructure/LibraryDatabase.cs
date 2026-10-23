@@ -12,7 +12,7 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
 
     public string DatabasePath => Path.Combine(paths.Data, "pixseek.db");
 
-    private string VecPath => Path.Combine(paths.Native, OperatingSystem.IsWindows() ? "vec0.dll" : OperatingSystem.IsMacOS() ? "vec0.dylib" : "vec0.so");
+    private string VecPath => Path.Combine(paths.Native, OperatingSystem.IsAndroid() ? "libvec0.so" : OperatingSystem.IsWindows() ? "vec0.dll" : OperatingSystem.IsMacOS() ? "vec0.dylib" : "vec0.so");
 
     public async Task<SqliteConnection> OpenAsync(CancellationToken ct = default)
     {
@@ -64,6 +64,11 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
             WHERE NOT EXISTS(SELECT 1 FROM SchemaMigration WHERE Version=2);
             CREATE INDEX IF NOT EXISTS IX_Media_Filter ON MediaFile(MediaType,LibraryFolderId,LastModifiedAt DESC,Id DESC);
             INSERT OR IGNORE INTO SchemaMigration VALUES(2,CURRENT_TIMESTAMP);
+            """, ct);
+        await ExecuteAsync(c, """
+            CREATE TABLE IF NOT EXISTS MediaSource(MediaFileId INTEGER NOT NULL REFERENCES MediaFile(Id) ON DELETE CASCADE,LibraryFolderId INTEGER NOT NULL REFERENCES LibraryFolder(Id) ON DELETE CASCADE,PRIMARY KEY(MediaFileId,LibraryFolderId));
+            CREATE INDEX IF NOT EXISTS IX_MediaSource_Folder ON MediaSource(LibraryFolderId,MediaFileId);
+            INSERT OR IGNORE INTO SchemaMigration VALUES(4,CURRENT_TIMESTAMP);
             """, ct);
         if (File.Exists(VecPath))
         {
@@ -157,6 +162,75 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
         return items;
     }
 
+    /// <summary>SAF/MediaStore roots are persisted as URIs, never coerced into filesystem paths.</summary>
+    public async Task<LibraryFolder> AddContentSourceAsync(string uri, string name, bool recursive, CancellationToken ct = default)
+    {
+        if (!Uri.TryCreate(uri, UriKind.Absolute, out var parsed) || parsed.Scheme is not ("content" or "pixseek"))
+            throw new ArgumentException("Invalid content source.", nameof(uri));
+        await using var c = await OpenAsync(ct);
+        using var command = c.CreateCommand();
+        command.CommandText = "INSERT INTO LibraryFolder(Path,DisplayName,Recursive) VALUES($p,$n,$r) ON CONFLICT(Path) DO UPDATE SET Enabled=1,DisplayName=$n,Recursive=$r RETURNING Id";
+        command.Parameters.AddWithValue("$p", uri); command.Parameters.AddWithValue("$n", name); command.Parameters.AddWithValue("$r", recursive);
+        var id = (long)(await command.ExecuteScalarAsync(ct))!;
+        return new(id, uri, name, recursive);
+    }
+
+    public async Task ReconcileContentSourceAsync(long folderId, IReadOnlySet<string> present, CancellationToken ct)
+    {
+        // Invoke only after a complete, authorized provider enumeration. A disconnected provider
+        // must never mark an entire library absent.
+        await _write.WaitAsync(ct);
+        try
+        {
+            await using var c = await OpenAsync(ct);
+            using var tx = c.BeginTransaction();
+            using var query = c.CreateCommand(); query.Transaction = tx;
+            query.CommandText = "SELECT m.Id,m.FullPath FROM MediaFile m JOIN MediaSource s ON s.MediaFileId=m.Id WHERE s.LibraryFolderId=$id";
+            query.Parameters.AddWithValue("$id", folderId);
+            var absent = new List<long>();
+            await using (var reader = await query.ExecuteReaderAsync(ct))
+                while (await reader.ReadAsync(ct)) if (!present.Contains(reader.GetString(1))) absent.Add(reader.GetInt64(0));
+            foreach (var id in absent)
+            {
+                using var unlink = c.CreateCommand(); unlink.Transaction = tx;
+                unlink.CommandText = "DELETE FROM MediaSource WHERE MediaFileId=$media AND LibraryFolderId=$folder; SELECT COUNT(*) FROM MediaSource WHERE MediaFileId=$media";
+                unlink.Parameters.AddWithValue("$media", id); unlink.Parameters.AddWithValue("$folder", folderId);
+                if (Convert.ToInt64(await unlink.ExecuteScalarAsync(ct)) > 0) continue;
+                if (_dimensions > 0) await DeleteVectorsAsync(c, id, tx, ct);
+                using var update = c.CreateCommand(); update.Transaction = tx;
+                update.CommandText = "UPDATE MediaFile SET Status='Absent',IndexedVersion=NULL,Payload=json_set(Payload,'$.Status','Absent','$.IndexedVersion',NULL) WHERE Id=$id";
+                update.Parameters.AddWithValue("$id", id); await update.ExecuteNonQueryAsync(ct);
+            }
+            tx.Commit();
+        }
+        finally { _write.Release(); }
+    }
+
+    public async Task LinkContentMediaAsync(long mediaId, long folderId, CancellationToken ct)
+    {
+        await using var c = await OpenAsync(ct);
+        using var command = c.CreateCommand();
+        command.CommandText = "INSERT OR IGNORE INTO MediaSource(MediaFileId,LibraryFolderId) VALUES($media,$folder)";
+        command.Parameters.AddWithValue("$media", mediaId); command.Parameters.AddWithValue("$folder", folderId);
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
+    public async Task RemoveContentSourceAsync(long folderId, CancellationToken ct)
+    {
+        // Reassign the owning FK before deleting an overlapping album/gallery source.
+        await using (var c = await OpenAsync(ct))
+        {
+            using var command = c.CreateCommand();
+            command.CommandText = """
+                UPDATE MediaFile SET LibraryFolderId=(SELECT MIN(s.LibraryFolderId) FROM MediaSource s WHERE s.MediaFileId=MediaFile.Id AND s.LibraryFolderId!=$folder),
+                Payload=json_set(Payload,'$.LibraryFolderId',(SELECT MIN(s.LibraryFolderId) FROM MediaSource s WHERE s.MediaFileId=MediaFile.Id AND s.LibraryFolderId!=$folder))
+                WHERE LibraryFolderId=$folder AND EXISTS(SELECT 1 FROM MediaSource s WHERE s.MediaFileId=MediaFile.Id AND s.LibraryFolderId!=$folder)
+                """;
+            command.Parameters.AddWithValue("$folder", folderId); await command.ExecuteNonQueryAsync(ct);
+        }
+        await RemoveFolderAsync(folderId, ct);
+    }
+
     public async Task SetFolderStatusAsync(long id, string status, CancellationToken ct = default)
     {
         await using var c = await OpenAsync(ct);
@@ -229,12 +303,21 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
         };
     }
 
+    public async Task UpdateThumbnailAsync(long id, string path, CancellationToken ct)
+    {
+        await using var c = await OpenAsync(ct);
+        using var command = c.CreateCommand();
+        command.CommandText = "UPDATE MediaFile SET ThumbnailPath=$path,Payload=json_set(Payload,'$.ThumbnailPath',$path) WHERE Id=$id";
+        command.Parameters.AddWithValue("$path", path); command.Parameters.AddWithValue("$id", id);
+        await command.ExecuteNonQueryAsync(ct);
+    }
+
     public async Task<IReadOnlyList<MediaFile>> MediaAsync(int offset = 0, int limit = 240, string type = "Tout", string sort = "Date", long? folder = null, CancellationToken ct = default, DateTime? fromDate = null, DateTime? toDateExclusive = null, long? personId = null, string? faceVersion = null, double faceThreshold = .45)
     {
         await using var c = await OpenAsync(ct);
         using var cmd = c.CreateCommand();
         var order = sort == "Nom" ? "FileName COLLATE NOCASE" : sort == "Taille" ? "SizeBytes DESC" : "LastModifiedAt DESC";
-        cmd.CommandText = $"SELECT m.Id,m.Payload,m.IndexedVersion FROM MediaFile m WHERE m.Status != 'Absent' AND ($type < 0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder) AND ($from IS NULL OR julianday(m.LastModifiedAt)>=julianday($from)) AND ($to IS NULL OR julianday(m.LastModifiedAt)<julianday($to)) {PeopleRepository.FilterSql(personId)} ORDER BY {order},m.Id DESC LIMIT $limit OFFSET $offset";
+        cmd.CommandText = $"SELECT m.Id,m.Payload,m.IndexedVersion FROM MediaFile m WHERE m.Status != 'Absent' AND ($type < 0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder OR EXISTS(SELECT 1 FROM MediaSource scope WHERE scope.MediaFileId=m.Id AND scope.LibraryFolderId=$folder)) AND ($from IS NULL OR julianday(m.LastModifiedAt)>=julianday($from)) AND ($to IS NULL OR julianday(m.LastModifiedAt)<julianday($to)) {PeopleRepository.FilterSql(personId)} ORDER BY {order},m.Id DESC LIMIT $limit OFFSET $offset";
         PeopleRepository.BindFilter(cmd, personId, faceVersion, faceThreshold);
         cmd.Parameters.AddWithValue("$from", (object? )fromDate?.ToUniversalTime().ToString("O") ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$to", (object? )toDateExclusive?.ToUniversalTime().ToString("O") ?? DBNull.Value);
@@ -253,7 +336,7 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
     {
         await using var c = await OpenAsync(ct);
         using var cmd = c.CreateCommand();
-        cmd.CommandText = $"SELECT m.Id,m.FullPath,m.MediaType FROM MediaFile m WHERE m.Status!='Absent' AND ($type<0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder) {PeopleRepository.FilterSql(personId)}";
+        cmd.CommandText = $"SELECT m.Id,m.FullPath,m.MediaType FROM MediaFile m WHERE m.Status!='Absent' AND ($type<0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder OR EXISTS(SELECT 1 FROM MediaSource scope WHERE scope.MediaFileId=m.Id AND scope.LibraryFolderId=$folder)) {PeopleRepository.FilterSql(personId)}";
         cmd.Parameters.AddWithValue("$type", type == "Photos" ? 0 : type == "Vidéos" ? 1 : -1);
         cmd.Parameters.AddWithValue("$folder", (object?)folder ?? DBNull.Value);
         PeopleRepository.BindFilter(cmd, personId, faceVersion, faceThreshold);
@@ -279,7 +362,7 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
     {
         await using var c = await OpenAsync(ct);
         using var cmd = c.CreateCommand();
-        cmd.CommandText = $"SELECT m.Id,m.Payload,m.IndexedVersion,m.FileName FROM MediaFile m WHERE m.Status != 'Absent' AND ($type < 0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder) {PeopleRepository.FilterSql(personId)}";
+        cmd.CommandText = $"SELECT m.Id,m.Payload,m.IndexedVersion,m.FileName FROM MediaFile m WHERE m.Status != 'Absent' AND ($type < 0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder OR EXISTS(SELECT 1 FROM MediaSource scope WHERE scope.MediaFileId=m.Id AND scope.LibraryFolderId=$folder)) {PeopleRepository.FilterSql(personId)}";
         PeopleRepository.BindFilter(cmd, personId, faceVersion, faceThreshold);
         cmd.Parameters.AddWithValue("$type", type == "Photos" ? 0 : type == "Vidéos" ? 1 : -1);
         cmd.Parameters.AddWithValue("$folder", (object? )folder ?? DBNull.Value);
@@ -433,7 +516,7 @@ public sealed class LibraryDatabase(IPlatformPaths paths) : IVectorSearchService
                 AND rowid IN (
                     SELECT e.Id FROM MediaEmbedding e JOIN MediaFile m ON m.Id=e.MediaFileId
                     WHERE m.Status != 'Absent' AND m.IndexedVersion IS NOT NULL
-                    AND ($type < 0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder)
+                    AND ($type < 0 OR m.MediaType=$type) AND ($folder IS NULL OR m.LibraryFolderId=$folder OR EXISTS(SELECT 1 FROM MediaSource scope WHERE scope.MediaFileId=m.Id AND scope.LibraryFolderId=$folder))
                     {PeopleRepository.FilterSql(personId)}
                 )
             )

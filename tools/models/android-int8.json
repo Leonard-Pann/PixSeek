@@ -1,0 +1,27 @@
+{
+  "license": "MIT (OpenCLIP weights; see upstream model card)",
+  "dimensions": 512,
+  "id": "immich-app/XLM-Roberta-Base-ViT-B-32__laion5b_s13b_b90k-android-int8",
+  "files": [
+    {
+      "path": "visual/model.onnx",
+      "size": 96195402,
+      "sha256": "4e66c69c690e65997197a19c67a05a496dee96a062f81d7932f1fc260fb2c70b",
+      "url": ""
+    },
+    {
+      "path": "textual/model.onnx",
+      "size": 279412362,
+      "sha256": "0223d8dc4cb6ebdc4df611c6b0a8f0809d30c128a99fa3906f04fd85277480d6",
+      "url": ""
+    },
+    {
+      "path": "textual/sentencepiece.model",
+      "size": 5568958,
+      "sha256": "cdc831438219c2ba5a63dd3de33e2636ce43868c6330925f3622f0ae92a442e2",
+      "url": ""
+    }
+  ],
+  "revision": "111f6ddca817bb6cd8343c3e3dc5ce39d9ba54b0-ort1.23.2-dynamic-qint8-v2",
+  "preprocessingVersion": "android-bicubic-224-center-rgb-unigram-v1"
+}

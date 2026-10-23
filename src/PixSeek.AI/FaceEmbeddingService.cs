@@ -1,14 +1,13 @@
 using Microsoft.ML.OnnxRuntime;
 using Microsoft.ML.OnnxRuntime.Tensors;
 using PixSeek.Core;
-using PixSeek.Media;
 using System.Security.Cryptography;
 using System.Text;
 
 namespace PixSeek.AI;
 
 /// <summary>CPU YuNet detector and SFace recognizer. No names are inferred by the models.</summary>
-public sealed class FaceEmbeddingService(FaceModelManager models, ImageMagickService images, IPlatformPaths paths) : IDisposable
+public sealed class FaceEmbeddingService(FaceModelManager models, IImageTensorSource images, IPlatformPaths paths) : IDisposable
 {
     private readonly SemaphoreSlim _gate = new(1);
     private InferenceSession? _detector, _recognizer;
@@ -28,15 +27,7 @@ public sealed class FaceEmbeddingService(FaceModelManager models, ImageMagickSer
                 _recognizer ??= new(Path.Combine(models.DirectoryPath, models.Manifest.Files[1].Path), options);
                 var size = _detector.InputMetadata.Values.First().Dimensions[^1];
                 if (size != DetectorSize) throw new InvalidDataException("Unexpected YuNet input size: " + size);
-                var temporary = Path.Combine(paths.Cache, "face-input-" + Guid.NewGuid().ToString("N") + ".rgb");
-                byte[] rgb;
-                try
-                {
-                    await images.RunAsync([imagePath + "[0]", "-auto-orient", "-colorspace", "sRGB", "-background", "black", "-alpha", "remove",
-                        "-resize", $"{size}x{size}>", "-gravity", "northwest", "-extent", $"{size}x{size}", "-depth", "8", "RGB:" + temporary], ct);
-                    rgb = await File.ReadAllBytesAsync(temporary, ct);
-                }
-                finally { if (File.Exists(temporary)) File.Delete(temporary); }
+                var rgb = await images.ReadFaceRgbAsync(imagePath, size, ct);
                 var tensor = new float[size * size * 3];
                 for (var i = 0; i < size * size; i++)
                     for (var c = 0; c < 3; c++) tensor[c * size * size + i] = rgb[i * 3 + 2 - c]; // YuNet BGR [0,255].
@@ -86,13 +77,7 @@ public sealed class FaceEmbeddingService(FaceModelManager models, ImageMagickSer
                     var thumbnail = Path.Combine(paths.Cache, "face-" + key + ".jpg");
                     if (!File.Exists(thumbnail))
                     {
-                        var raw = Path.Combine(paths.Cache, "face-crop-" + Guid.NewGuid().ToString("N") + ".rgb");
-                        try
-                        {
-                            await File.WriteAllBytesAsync(raw, aligned, ct);
-                            await images.RunAsync(["-size", "112x112", "-depth", "8", "RGB:" + raw, "-quality", "88", thumbnail], ct);
-                        }
-                        finally { if (File.Exists(raw)) File.Delete(raw); }
+                        await images.WriteFaceThumbnailAsync(aligned, 112, thumbnail, ct);
                     }
                     faces.Add(new(imagePath, thumbnail, vector, face.Score, face.X, face.Y, face.Width, face.Height));
                 }

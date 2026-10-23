@@ -5,5 +5,7 @@
   <Project Path="src/PixSeek.Infrastructure/PixSeek.Infrastructure.csproj" />
   <Project Path="src/PixSeek.Media/PixSeek.Media.csproj" />
   <Project Path="src/PixSeek.AI/PixSeek.AI.csproj" />
+  <Project Path="src/PixSeek.Inference/PixSeek.Inference.csproj" />
+  <Project Path="src/PixSeek.Mobile/PixSeek.Mobile.csproj" />
   <Project Path="tests/PixSeek.Tests/PixSeek.Tests.csproj" />
 </Solution>

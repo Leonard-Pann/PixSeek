@@ -27,14 +27,17 @@ public sealed class ModelManager
         _activeId = store?.Current.ActiveModelId == "siglip2" ? "siglip2" : DefaultId;
     }
 
-    private static readonly Dictionary<string, ModelManifest> Manifests = new();
-    private static ModelManifest LoadManifest(string id)
+    private readonly Dictionary<string, ModelManifest> Manifests = new();
+    private ModelManifest LoadManifest(string id)
     {
         lock (Manifests)
         {
             if (!Manifests.TryGetValue(id, out var manifest))
             {
-                manifest = JsonSerializer.Deserialize<ModelManifest>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "models", id == "siglip2" ? "siglip2.json" : "manifest.json")), JsonOptions)!;
+                var fileName = id == "siglip2" ? "siglip2.json" : "manifest.json";
+                var file = Path.Combine(paths.Models, fileName);
+                if (!File.Exists(file)) file = Path.Combine(AppContext.BaseDirectory, "models", fileName);
+                manifest = JsonSerializer.Deserialize<ModelManifest>(File.ReadAllText(file), JsonOptions)!;
                 Manifests[id] = manifest;
             }
 

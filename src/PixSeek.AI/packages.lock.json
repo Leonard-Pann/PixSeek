@@ -103,6 +103,13 @@
       "pixseek.core": {
         "type": "Project"
       },
+      "pixseek.inference": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime": "[1.31.0, )",
+          "PixSeek.Infrastructure": "[0.3.1, )"
+        }
+      },
       "pixseek.infrastructure": {
         "type": "Project",
         "dependencies": {

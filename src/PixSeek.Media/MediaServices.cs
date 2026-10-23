@@ -49,7 +49,7 @@ public sealed class FfprobeService(NativeTools tools, ProcessRunner runner)
     private static int Number(JsonElement e, string name) => e.TryGetProperty(name, out var p) && p.TryGetInt32(out var n) ? n : 0;
 }
 
-public sealed class ImageMagickService(NativeTools tools, ProcessRunner runner)
+public sealed class ImageMagickService(NativeTools tools, ProcessRunner runner) : IImageTensorSource
 {
     public Task<string> RunAsync(IEnumerable<string> args, CancellationToken ct = default) => runner.CheckedAsync(tools.PathFor("magick"), args, ct, timeout: TimeSpan.FromMinutes(15));
     public async Task<MediaMetadata> IdentifyAsync(string file, CancellationToken ct = default)
@@ -75,6 +75,28 @@ public sealed class ImageMagickService(NativeTools tools, ProcessRunner runner)
             if (File.Exists(tmp))
                 File.Delete(tmp);
         }
+    }
+
+    public async Task<byte[]> ReadFaceRgbAsync(string file, int size, CancellationToken ct)
+    {
+        var temporary = Path.Combine(Path.GetTempPath(), "pixseek-face-" + Guid.NewGuid().ToString("N") + ".rgb");
+        try
+        {
+            await RunAsync([file + "[0]", "-auto-orient", "-colorspace", "sRGB", "-background", "black", "-alpha", "remove", "-resize", $"{size}x{size}>", "-gravity", "northwest", "-extent", $"{size}x{size}", "-depth", "8", "RGB:" + temporary], ct);
+            return await File.ReadAllBytesAsync(temporary, ct);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
+    }
+
+    public async Task WriteFaceThumbnailAsync(byte[] rgb, int size, string destination, CancellationToken ct)
+    {
+        var temporary = Path.Combine(Path.GetTempPath(), "pixseek-face-" + Guid.NewGuid().ToString("N") + ".rgb");
+        try
+        {
+            await File.WriteAllBytesAsync(temporary, rgb, ct);
+            await RunAsync(["-size", $"{size}x{size}", "-depth", "8", "RGB:" + temporary, "-quality", "88", destination], ct);
+        }
+        finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
 
     public async Task<string> PixelSignatureAsync(string file, CancellationToken ct) => (await RunAsync([file, "-format", "%#\n", "info:"], ct)).Trim();

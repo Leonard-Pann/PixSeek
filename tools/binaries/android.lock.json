@@ -1,0 +1,24 @@
+{
+  "ndk": {
+    "version": "r30",
+    "url": "https://dl.google.com/android/repository/android-ndk-r30-windows.zip",
+    "sha256": "b830098aaf18b67a42eb831c404e15e5f2990a474f054ac145b0bc957ac6d729"
+  },
+  "sqliteVec": {
+    "version": "0.1.6",
+    "url": "https://github.com/asg017/sqlite-vec/releases/download/v0.1.6/sqlite-vec-0.1.6-amalgamation.tar.gz",
+    "sha256": "99b6ec36e9d259d91bd6cb2c053c3a7660f8791eaa66126c882a6a4557e57d6a",
+    "license": "MIT OR Apache-2.0"
+  },
+  "sqliteHeaders": {
+    "version": "3.50.4",
+    "url": "https://www.sqlite.org/2025/sqlite-amalgamation-3500400.zip",
+    "sha256": "1d3049dd0f830a025a53105fc79fd2ab9431aea99e137809d064d8ee8356b032",
+    "license": "Public domain"
+  },
+  "abis": ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"],
+  "minSdk": 28,
+  "targetSdk": 36,
+  "elfPageSize": 16384,
+  "cflags": ["-shared", "-fPIC", "-O3", "-fvisibility=default", "-Wl,-z,max-page-size=16384"]
+}

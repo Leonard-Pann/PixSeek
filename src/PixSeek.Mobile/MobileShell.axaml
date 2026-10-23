@@ -1,0 +1,199 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:PixSeek.Mobile" x:Class="PixSeek.Mobile.MobileShell">
+  <Grid Background="{DynamicResource MobileCanvas}">
+    <Grid RowDefinitions="Auto,Auto,Auto,*,Auto">
+      <Grid Margin="16,8,12,4" ColumnDefinitions="Auto,*,Auto,Auto">
+        <Image Source="avares://PixSeek.Mobile/Assets/PixSeek.png" Width="32" Height="32" />
+        <TextBlock Grid.Column="1" Text="PixSeek" Classes="heading" Margin="10,0" VerticalAlignment="Center" />
+        <Button Grid.Column="2" Content="＋" FontSize="26" Classes="quiet" Command="{Binding OpenAddCommand}" AutomationProperties.Name="{Binding Text[AddMedia]}" />
+        <Button Grid.Column="3" Classes="quiet" Command="{Binding OpenSettingsCommand}" AutomationProperties.Name="{Binding Text[Settings]}">
+          <PathIcon Width="22" Height="22" Data="M12,8 A4,4 0 1 0 12,16 A4,4 0 1 0 12,8 M10,2 L14,2 L15,5 L18,6 L21,5 L23,9 L21,12 L23,15 L21,19 L18,18 L15,19 L14,22 L10,22 L9,19 L6,18 L3,19 L1,15 L3,12 L1,9 L3,5 L6,6 L9,5 Z" />
+        </Button>
+      </Grid>
+      <Grid Grid.Row="1" Margin="12,2,12,8">
+        <TextBox x:Name="SearchBox" Text="{Binding Query, Mode=TwoWay}" PlaceholderText="{Binding Text[SearchPlaceholder]}"
+                 Padding="16,12,48,12" KeyDown="SearchKeyDown" AutomationProperties.Name="{Binding Text[Search]}" />
+        <Button Content="×" FontSize="23" HorizontalAlignment="Right" Classes="quiet" IsVisible="{Binding HasQuery}" Command="{Binding ClearSearchCommand}" AutomationProperties.Name="{Binding Text[ClearSearch]}" />
+      </Grid>
+      <StackPanel Grid.Row="2" Spacing="6" Margin="12,0,12,8">
+        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+          <ComboBox SelectedIndex="{Binding MediaTypeIndex}">
+            <ComboBoxItem Content="{Binding Text[AllMedia]}" /><ComboBoxItem Content="{Binding Text[Photos]}" /><ComboBoxItem Content="{Binding Text[Videos]}" />
+          </ComboBox>
+          <ComboBox Grid.Column="1" ItemsSource="{Binding Folders}" SelectedItem="{Binding Folder}" AutomationProperties.Name="{Binding Text[AllFolders]}">
+            <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" /></DataTemplate></ComboBox.ItemTemplate>
+          </ComboBox>
+          <ComboBox Grid.Column="2" ItemsSource="{Binding Persons}" SelectedItem="{Binding Person}" AutomationProperties.Name="{Binding Text[AllPeople]}">
+            <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Label}" TextTrimming="CharacterEllipsis" /></DataTemplate></ComboBox.ItemTemplate>
+          </ComboBox>
+        </Grid>
+        <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding IsSelecting}">
+          <Button Content="{Binding SelectionLabel}" Command="{Binding ClearSelectionCommand}" Classes="quiet" HorizontalAlignment="Left" />
+          <Button Grid.Column="1" Content="{Binding Text[AddPerson]}" Command="{Binding OpenPersonCommand}" Classes="primary" />
+        </Grid>
+      </StackPanel>
+      <Grid Grid.Row="3" ClipToBounds="True">
+        <ListBox x:Name="Gallery" Classes="gallery" ItemsSource="{Binding Rows}" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.IsScrollChainingEnabled="False">
+          <ListBox.ItemsPanel><ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate></ListBox.ItemsPanel>
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <ItemsControl ItemsSource="{Binding Cells}" Margin="4,0,4,3">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="3" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <local:MobileTile Width="{Binding Width}" Height="{Binding Height}" CornerRadius="5" Background="{DynamicResource MobileLine}" ClipToBounds="True"
+                            Tapped="CellTapped" Holding="CellHolding" AutomationProperties.Name="{Binding Media.FileName}">
+                      <Grid>
+                        <local:MobileThumbnail FilePath="{Binding Thumbnail}" Stretch="UniformToFill" />
+                        <Border Background="#B0000000" CornerRadius="6" Padding="5,2" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="4" IsVisible="{Binding IsVideo}">
+                          <TextBlock Text="{Binding Duration}" Foreground="White" FontSize="11" />
+                        </Border>
+                        <Border Background="#557770E4" BorderBrush="#AFA9FF" BorderThickness="3" IsVisible="{Binding Selected}" CornerRadius="5">
+                          <TextBlock Text="✓" FontSize="23" Foreground="White" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="6" />
+                        </Border>
+                      </Grid>
+                    </local:MobileTile>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <StackPanel IsVisible="{Binding !HasMedia}" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="28" Spacing="16" MaxWidth="340">
+          <Image Source="avares://PixSeek.Mobile/Assets/PixSeek.png" Width="92" Height="92" />
+          <TextBlock Text="{Binding Text[MobileWelcome]}" Classes="heading" TextWrapping="Wrap" TextAlignment="Center" />
+          <TextBlock Text="{Binding Text[MobileWelcomeDetail]}" Classes="muted" TextAlignment="Center" />
+          <Button Content="{Binding Text[AddMedia]}" Command="{Binding OpenAddCommand}" Classes="primary" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Grid>
+      <Border Grid.Row="4" Background="{DynamicResource MobileSurface}" Padding="14,8" IsVisible="{Binding IsIndexing}">
+        <Grid RowDefinitions="Auto,Auto" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+          <StackPanel>
+            <TextBlock Text="{Binding Counter}" FontSize="12" />
+            <TextBlock Text="{Binding Status}" FontSize="11" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <Button Grid.Column="1" Content="{Binding Text[Pause]}" Command="{Binding PauseCommand}" Classes="quiet" />
+          <ProgressBar Grid.Row="1" Grid.ColumnSpan="2" Value="{Binding Progress}" Height="3" Margin="0,4,0,0" />
+        </Grid>
+      </Border>
+    </Grid>
+
+    <!-- Mobile sheets keep all actions within the same Activity. -->
+    <Grid IsVisible="{Binding HasPanel}" Background="#88000000">
+      <Border Background="{DynamicResource MobileSurface}" CornerRadius="24,24,0,0" Margin="0,44,0,0" Padding="18,8,18,18">
+        <Grid RowDefinitions="Auto,*">
+          <Grid ColumnDefinitions="*,Auto" Margin="0,4,0,6">
+            <TextBlock Text="{Binding Text[AddMedia]}" Classes="heading" VerticalAlignment="Center" IsVisible="{Binding AddOpen}" />
+            <TextBlock Text="{Binding Text[Settings]}" Classes="heading" VerticalAlignment="Center" IsVisible="{Binding SettingsOpen}" />
+            <TextBlock Text="{Binding Text[AddPerson]}" Classes="heading" VerticalAlignment="Center" IsVisible="{Binding PersonOpen}" />
+            <Button Grid.Column="1" Content="×" FontSize="26" Classes="quiet" Command="{Binding ClosePanelCommand}" AutomationProperties.Name="{Binding Text[Cancel]}" />
+          </Grid>
+          <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+            <Grid>
+              <StackPanel IsVisible="{Binding AddOpen}" Spacing="12">
+                <TextBlock Text="{Binding Text[ImportHint]}" Classes="muted" Margin="0,0,0,8" />
+                <Button Command="{Binding AddGalleryCommand}" Classes="wide">
+                  <StackPanel><TextBlock Text="{Binding Text[DeviceGallery]}" FontWeight="SemiBold" /><TextBlock Text="{Binding Text[DeviceGalleryDetail]}" Classes="muted" /></StackPanel>
+                </Button>
+                <Button Command="{Binding ShowAlbumsCommand}" Classes="wide">
+                  <StackPanel><TextBlock Text="{Binding Text[DeviceAlbums]}" FontWeight="SemiBold" /><TextBlock Text="{Binding Text[DeviceAlbumsDetail]}" Classes="muted" /></StackPanel>
+                </Button>
+                <Button Command="{Binding PickMediaCommand}" Classes="wide">
+                  <StackPanel><TextBlock Text="{Binding Text[PickMedia]}" FontWeight="SemiBold" /><TextBlock Text="{Binding Text[PickMediaDetail]}" Classes="muted" /></StackPanel>
+                </Button>
+                <Button Command="{Binding BrowseCommand}" Classes="wide">
+                  <StackPanel><TextBlock Text="{Binding Text[BrowseFolder]}" FontWeight="SemiBold" /><TextBlock Text="{Binding Text[BrowseFolderDetail]}" Classes="muted" /></StackPanel>
+                </Button>
+                <ItemsControl ItemsSource="{Binding Albums}">
+                  <ItemsControl.ItemTemplate><DataTemplate>
+                    <Button Classes="wide" Margin="0,4" Click="AlbumClicked">
+                      <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Name}" /><TextBlock Grid.Column="1" Text="{Binding Count}" Classes="muted" /></Grid>
+                    </Button>
+                  </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+              <StackPanel IsVisible="{Binding SettingsOpen}" Spacing="10">
+                <TextBlock Text="{Binding Text[General]}" Classes="section" />
+                <TextBlock Text="{Binding Text[Theme]}" />
+                <ComboBox SelectedIndex="{Binding ThemeIndex}"><ComboBoxItem Content="{Binding Text[System]}" /><ComboBoxItem Content="{Binding Text[Dark]}" /><ComboBoxItem Content="{Binding Text[Light]}" /></ComboBox>
+                <TextBlock Text="{Binding Text[Language]}" />
+                <ComboBox SelectedIndex="{Binding LanguageIndex}">
+                  <ComboBoxItem Content="English" /><ComboBoxItem Content="Français" /><ComboBoxItem Content="Italiano" /><ComboBoxItem Content="Deutsch" /><ComboBoxItem Content="Español" />
+                </ComboBox>
+                <Button Content="{Binding Text[ClearCache]}" Command="{Binding ClearCacheCommand}" HorizontalAlignment="Stretch" />
+                <TextBlock Text="{Binding Text[Library]}" Classes="section" />
+                <ItemsControl ItemsSource="{Binding LibraryFolders}">
+                  <ItemsControl.ItemTemplate><DataTemplate>
+                    <Border Classes="surface" BorderBrush="{DynamicResource MobileLine}" BorderThickness="1" Margin="0,4">
+                      <StackPanel Spacing="8">
+                        <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                        <Grid ColumnDefinitions="*,Auto">
+                          <CheckBox IsChecked="{Binding Recursive}" Content="{Binding $parent[local:MobileShell].DataContext.Text[Subfolders]}" IsCheckedChanged="RecursiveChanged" />
+                          <Button Grid.Column="1" Content="{Binding $parent[local:MobileShell].DataContext.Text[Remove]}" Classes="quiet" Click="RemoveFolderClicked" />
+                        </Grid>
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="{Binding Text[AddMedia]}" Command="{Binding OpenAddCommand}" />
+                <Button Content="{Binding Text[ReindexAll]}" Command="{Binding ReindexCommand}" />
+                <TextBlock Text="{Binding Text[People]}" Classes="section" />
+                <Button Content="{Binding Text[AddPerson]}" Command="{Binding OpenPersonCommand}" Classes="primary" />
+                <ItemsControl ItemsSource="{Binding Profiles}">
+                  <ItemsControl.ItemTemplate><DataTemplate>
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,4"><TextBlock Text="{Binding Label}" VerticalAlignment="Center" /><Button Grid.Column="1" Content="×" Classes="quiet" Click="RemovePersonClicked" /></Grid>
+                  </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBlock Text="{Binding Text[AiModel]}" Classes="section" />
+                <TextBlock Text="XLM-RoBERTa + ViT-B/32 · int8" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding Text[LocalAiDetail]}" Classes="muted" />
+                <TextBlock Text="{Binding Text[VideoInterval]}" />
+                <NumericUpDown Value="{Binding FrameInterval}" Minimum="1" Maximum="600" Increment="1" FormatString="0" MinHeight="48" />
+                <TextBlock Text="{Binding Text[MaxFrames]}" />
+                <NumericUpDown Value="{Binding MaxFrames}" Minimum="1" Maximum="120" Increment="1" FormatString="0" MinHeight="48" />
+                <TextBlock Text="{Binding Text[ForegroundIndexing]}" Classes="muted" Margin="0,8" />
+                <TextBlock Text="{Binding Version}" Classes="muted" HorizontalAlignment="Center" Margin="0,24,0,12" />
+              </StackPanel>
+              <StackPanel IsVisible="{Binding PersonOpen}" Spacing="14">
+                <TextBlock Text="{Binding Text[PersonHint]}" Classes="muted" />
+                <Button Content="{Binding Text[ChooseReferencePhotos]}" Command="{Binding PickReferencesCommand}" Classes="primary" />
+                <ProgressBar IsIndeterminate="True" IsVisible="{Binding IsDetecting}" Height="4" />
+                <ItemsControl ItemsSource="{Binding Faces}">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate><DataTemplate>
+                    <CheckBox IsChecked="{Binding Selected}" Margin="4" MinHeight="108">
+                      <local:MobileThumbnail FilePath="{Binding Thumbnail}" Width="84" Height="84" Stretch="UniformToFill" />
+                    </CheckBox>
+                  </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <TextBox Text="{Binding PersonKeywords}" PlaceholderText="{Binding Text[PersonNames]}" AcceptsReturn="False" />
+                <TextBlock Text="{Binding Text[PersonPrivacy]}" Classes="muted" />
+                <Button Content="{Binding Text[Add]}" Command="{Binding AddPersonCommand}" Classes="primary" HorizontalAlignment="Stretch" IsEnabled="{Binding !IsDetecting}" />
+              </StackPanel>
+            </Grid>
+          </ScrollViewer>
+        </Grid>
+      </Border>
+    </Grid>
+    <Grid IsVisible="{Binding ViewerOpen}" Background="Black" RowDefinitions="56,*,56">
+      <Grid ColumnDefinitions="Auto,*,Auto">
+        <Button Content="‹" Command="{Binding CloseViewerCommand}" Classes="viewer" AutomationProperties.Name="{Binding Text[Back]}" />
+        <Button Grid.Column="2" Content="↗" Command="{Binding ShareCommand}" Classes="viewer" AutomationProperties.Name="{Binding Text[Share]}" />
+      </Grid>
+      <Grid Grid.Row="1" Background="Black">
+        <local:TouchImage Bitmap="{Binding Preview}" AutomationProperties.Name="{Binding ViewerName}" />
+        <ContentControl Content="{Binding VideoPlayer}" />
+      </Grid>
+      <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto">
+        <Button Content="‹" Command="{Binding PreviousCommand}" Classes="viewer" AutomationProperties.Name="{Binding Text[Previous]}" />
+        <Button Grid.Column="2" Content="›" Command="{Binding NextCommand}" Classes="viewer" AutomationProperties.Name="{Binding Text[Next]}" />
+      </Grid>
+    </Grid>
+    <Border IsVisible="{Binding HasError}" Background="#CC352F" CornerRadius="16" Padding="14,8" Margin="12,0,12,12" VerticalAlignment="Bottom" MaxHeight="160">
+      <Grid ColumnDefinitions="*,Auto">
+        <ScrollViewer><TextBlock Text="{Binding Error}" Foreground="White" FontSize="13" TextWrapping="Wrap" /></ScrollViewer>
+        <Button Grid.Column="1" Content="×" Foreground="White" Classes="quiet" Command="{Binding DismissErrorCommand}" />
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

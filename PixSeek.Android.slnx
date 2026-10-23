@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="PixSeek.Android/PixSeek.Android.csproj" />
+  <Project Path="src/PixSeek.Mobile/PixSeek.Mobile.csproj" />
+  <Project Path="src/PixSeek.Inference/PixSeek.Inference.csproj" />
+  <Project Path="src/PixSeek.Infrastructure/PixSeek.Infrastructure.csproj" />
+  <Project Path="src/PixSeek.Core/PixSeek.Core.csproj" />
+</Solution>

@@ -246,12 +246,20 @@
         "dependencies": {
           "Microsoft.ML.OnnxRuntime": "[1.31.0, )",
           "PixSeek.Core": "[0.3.1, )",
+          "PixSeek.Inference": "[0.3.1, )",
           "PixSeek.Media": "[0.3.1, )",
           "Tokenizers.HuggingFace": "[3.23.1, )"
         }
       },
       "pixseek.core": {
         "type": "Project"
+      },
+      "pixseek.inference": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.ML.OnnxRuntime": "[1.31.0, )",
+          "PixSeek.Infrastructure": "[0.3.1, )"
+        }
       },
       "pixseek.infrastructure": {
         "type": "Project",

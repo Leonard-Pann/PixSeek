@@ -20,6 +20,7 @@ public static class AppServices
         s.AddSingleton<ProcessRunner>();
         s.AddSingleton<NativeTools>();
         s.AddSingleton<ImageMagickService>();
+        s.AddSingleton<IImageTensorSource>(p => p.GetRequiredService<ImageMagickService>());
         s.AddSingleton<FfprobeService>();
         s.AddSingleton<FfmpegService>();
         s.AddSingleton<ThumbnailService>();

@@ -35,6 +35,7 @@ public sealed class JobControl : IDisposable
     }
 
     public Task CheckpointAsync() => _resume.Task.WaitAsync(Token);
+    public Task WaitAsync(CancellationToken cancellationToken) => _resume.Task.WaitAsync(cancellationToken);
     public void Dispose()
     {
         Cancel();

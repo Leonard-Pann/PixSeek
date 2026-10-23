@@ -65,3 +65,6 @@ TestDataset
 # Model weights are downloaded and verified from tools/models/*.json during build.
 /models/
 *.partial
+/runtimes/android/*/*.so
+*.keystore
+*.jks

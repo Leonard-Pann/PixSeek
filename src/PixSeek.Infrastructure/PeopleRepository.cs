@@ -225,7 +225,7 @@ public sealed class PeopleRepository(LibraryDatabase db)
                             SELECT f.Id FROM FaceObservation f JOIN MediaFile m ON m.Id=f.MediaFileId
                             WHERE m.Status!='Absent' AND f.ModelVersion=$version
                             AND f.SizeBytes=m.SizeBytes AND f.ModifiedAt=m.LastModifiedAt
-                            AND ($folder IS NULL OR m.LibraryFolderId=$folder)
+                            AND ($folder IS NULL OR m.LibraryFolderId=$folder OR EXISTS(SELECT 1 FROM MediaSource scope WHERE scope.MediaFileId=m.Id AND scope.LibraryFolderId=$folder))
                             {FilterSql(personId)}
                         )
                     )

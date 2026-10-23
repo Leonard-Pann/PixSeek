@@ -18,8 +18,10 @@ public sealed record MediaFile
     public long Id { get; init; }
     public long LibraryFolderId { get; init; }
     public string FullPath { get; init; } = "";
-    public string FileName => Path.GetFileName(FullPath);
-    public string Extension => Path.GetExtension(FullPath).ToLowerInvariant();
+    // Content-provider URIs have opaque IDs; mobile keeps the provider's display name.
+    public string? DisplayName { get; init; }
+    public string FileName => DisplayName ?? Path.GetFileName(FullPath);
+    public string Extension => Path.GetExtension(FileName).ToLowerInvariant();
     public MediaType MediaType { get; init; }
     public long SizeBytes { get; init; }
     public DateTime LastModifiedAt { get; init; }
