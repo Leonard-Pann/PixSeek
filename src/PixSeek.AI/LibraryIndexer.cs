@@ -52,14 +52,17 @@ public sealed class LibraryIndexer(LibraryDatabase db, ImageMagickService images
                     var old = await db.FindAsync(path, ct);
                     var info = new FileInfo(path);
                     var unchanged = IsUnchanged(old, info);
+                    var cachedThumbnail = unchanged ? thumbnails.FindCachedPath(old!) : null;
+                    if (cachedThumbnail != null && old!.ThumbnailPath != cachedThumbnail)
+                        old = await db.SaveMediaAsync(old with { ThumbnailPath = cachedThumbnail }, ct);
                     var ready = unchanged && !force && old!.Status is not ("Erreur" or "Absent") &&
-                        File.Exists(old.ThumbnailPath) && (!ai || old.IndexedVersion == version) &&
+                        cachedThumbnail != null && (!ai || old.IndexedVersion == version) &&
                         (old.MediaType != MediaType.Video || old.VideoDisplayWidth > 0);
                     MediaMetadata? metadata = null;
                     var units = ready ? 0 : ai ? 4 : 2;
                     if (!ready && ai && MediaFormats.TypeOf(path) == MediaType.Video)
                     {
-                        try { metadata = await probe.ProbeAsync(path, ct); }
+                        try { metadata = unchanged && old!.VideoDisplayWidth > 0 ? StoredMetadata(old) : await probe.ProbeAsync(path, ct); }
                         catch (OperationCanceledException) { throw; }
                         catch (Exception e) { logger.LogDebug(e, "Préparation vidéo impossible : {Path}", path); }
                         units = 3 + 2 * Timestamps(metadata?.DurationMilliseconds ?? old?.DurationMilliseconds ?? 0).Count;
@@ -97,10 +100,11 @@ public sealed class LibraryIndexer(LibraryDatabase db, ImageMagickService images
                 try
                 {
                     if (!ai) return;
-                    await embeddings.InitializeAsync(workers.Token);
+                    var initialized = false;
                     await foreach (var item in readyForAi.Reader.ReadAllAsync(workers.Token))
                     {
                         await control.CheckpointAsync();
+                        if (!initialized) { await embeddings.InitializeAsync(workers.Token); initialized = true; }
                         var remaining = Math.Max(0, item.Units - 2d);
                         try
                         {
@@ -177,9 +181,12 @@ public sealed class LibraryIndexer(LibraryDatabase db, ImageMagickService images
                                     LibraryFolderId = item.Folder.Id, FullPath = info.FullName, SizeBytes = info.Length,
                                     LastModifiedAt = info.LastWriteTimeUtc, MediaType = MediaFormats.TypeOf(item.Path)
                                 };
-                                var metadata = item.Metadata ?? (media.MediaType == MediaType.Image
+                                var metadata = item.Metadata ?? (unchanged && media.Width > 0 && media.Height > 0 &&
+                                    (media.MediaType != MediaType.Video || media.VideoDisplayWidth > 0) ? StoredMetadata(media) : media.MediaType == MediaType.Image
                                     ? await images.IdentifyAsync(item.Path, token) : await probe.ProbeAsync(item.Path, token));
-                                var display = media.MediaType == MediaType.Video ? FfprobeService.DisplaySize(metadata) : (0, 0);
+                                var display = media.MediaType == MediaType.Video
+                                    ? unchanged && media.VideoDisplayWidth > 0 ? (media.VideoDisplayWidth, media.VideoDisplayHeight) : FfprobeService.DisplaySize(metadata)
+                                    : (0, 0);
                                 media = await db.SaveMediaAsync(media with
                                 {
                                     Width = metadata.Width, Height = metadata.Height, DurationMilliseconds = metadata.DurationMilliseconds,
@@ -243,6 +250,8 @@ public sealed class LibraryIndexer(LibraryDatabase db, ImageMagickService images
 
     private IReadOnlyList<long> Timestamps(long duration) => FfmpegService.FrameTimestamps(duration,
         settings.Current.FrameIntervalSeconds, settings.Current.MaxVideoFrames);
+    private static MediaMetadata StoredMetadata(MediaFile media) => new(media.Width, media.Height, media.DurationMilliseconds,
+        media.Codec, media.HasAlpha, media.FrameCount);
     private static bool IsUnchanged(MediaFile? old, FileInfo info) => old != null && info.Exists &&
         old.SizeBytes == info.Length && old.LastModifiedAt == info.LastWriteTimeUtc;
     private async Task SaveErrorAsync(PlannedMedia item, Exception error, CancellationToken ct)

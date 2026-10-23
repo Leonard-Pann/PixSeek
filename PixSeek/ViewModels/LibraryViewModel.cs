@@ -96,7 +96,10 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
     public void CompressMedia(MediaCardViewModel card) => OptimizeFiles?.Invoke(card.IsSelected ? _selection.Values.Select(c => c.Path).ToArray() : [card.Media.FullPath]);
 
     [RelayCommand]
-    private async Task SelectAllAsync()
+    private Task SelectAllAsync() => SetSelectionAsync(toggle: false);
+    [RelayCommand]
+    private Task ToggleAllAsync() => SetSelectionAsync(toggle: true);
+    private async Task SetSelectionAsync(bool toggle)
     {
         var version = _filterVersion;
         var selectionVersion = ++_selectionVersion;
@@ -107,8 +110,10 @@ public partial class LibraryViewModel(LibraryDatabase db, OnnxEmbeddingService e
                 ? _cards.Select(c => (c.Media.Id, Path: c.Media.FullPath, c.IsVideo)).ToArray()
                 : await Task.Run(() => db.SelectionAsync(type, folder, person, faceModels.Version, FaceEmbeddingService.MatchThreshold));
             if (version != _filterVersion || selectionVersion != _selectionVersion) return;
+            var clear = toggle && items.Count > 0 && items.All(item => _selection.ContainsKey(item.Id));
             _selection.Clear();
-            foreach (var item in items) _selection[item.Id] = (item.Path, item.IsVideo);
+            if (!clear)
+                foreach (var item in items) _selection[item.Id] = (item.Path, item.IsVideo);
             UpdateSelectedCards();
         }
         catch (Exception e) { Error?.Invoke(e.Message); }

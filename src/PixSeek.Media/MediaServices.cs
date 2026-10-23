@@ -156,6 +156,17 @@ public sealed class FfmpegService(NativeTools tools, ProcessRunner runner)
 
 public sealed class ThumbnailService(IPlatformPaths paths, ImageMagickService images, FfmpegService videos)
 {
+    public string? FindCachedPath(MediaFile media)
+    {
+        if (IsCachedFile(media.ThumbnailPath)) return media.ThumbnailPath;
+        var canonical = CachePath(media);
+        return IsCachedFile(canonical) ? canonical : null;
+    }
+    private static bool IsCachedFile(string path)
+    {
+        try { return !string.IsNullOrWhiteSpace(path) && new FileInfo(path) is { Exists: true, Length: > 0 }; }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return false; }
+    }
     public string CachePath(MediaFile media, string suffix = "thumb")
     {
         var key = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{media.FullPath}|{media.SizeBytes}|{media.LastModifiedAt.Ticks}|v2|{suffix}")));
@@ -165,7 +176,7 @@ public sealed class ThumbnailService(IPlatformPaths paths, ImageMagickService im
     public async Task<string> CreateAsync(MediaFile media, CancellationToken ct)
     {
         var target = CachePath(media);
-        if (File.Exists(target))
+        if (IsCachedFile(target))
             return target;
         var temp = target + ".partial.jpg";
         try

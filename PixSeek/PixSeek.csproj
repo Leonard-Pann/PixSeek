@@ -9,7 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <AvaloniaResource Include="Assets/**" />
+    <AvaloniaResource Include="Assets/**" Exclude="Assets/PlaybackWarmup.mp4" />
+    <EmbeddedResource Include="Assets/PlaybackWarmup.mp4" LogicalName="PixSeek.PlaybackWarmup.mp4" />
     <PackageReference Include="LibVLCSharp" />
     <PackageReference Include="Avalonia.Skia" />
     <PackageReference Include="VideoLAN.LibVLC.Windows" Condition="('$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))) or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))" />

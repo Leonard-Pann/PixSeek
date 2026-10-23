@@ -73,3 +73,25 @@ Le test OpeningBenchmark produit artifacts/opening-performance-0.3.1.json sur JP
 ## Packaging Unix
 
 Les publications linux-x64, osx-arm64 et osx-x64 sont compilées depuis Windows et inspectées (ELF/Mach-O, architecture, dépendances requises, modèles SHA-256, absence de PDB/EXE Windows). Les tests du packager vérifient permissions Unix, déduplication et sécurité des chemins ; les tar finaux sont relus. La suite Windows Release reste verte : 44 tests, rapport unix-packaging-regression.trx. Aucun lancement Linux/Mac n'est revendiqué. Voir UNIX_RELEASES_0.3.1.md.
+
+## Démarrage, cache et sélection (23 octobre 2026)
+
+`StartupPerformanceTests.cs` ajoute trois régressions :
+
+- Le lecteur LibVLC est préparé en arrière-plan au démarrage, avec décodage réel d'un clip H.264/AAC muet. Les ouvertures simultanées partagent cette préparation et la même instance native. Le test mesure ensuite le délai jusqu'à la première frame d'une vidéo générée, dans `artifacts/video-startup-performance.json`. Ce délai ne garantit pas les performances de tous les codecs et supports de stockage. Une ouverture avant la fin de la préparation attend cette tâche sans bloquer le thread UI.
+- Une base est fermée/réouverte avec une miniature photo et une miniature vidéo déjà générées. Le scan doit retrouver les mêmes fichiers, sans modifier leur date, sans outils natifs disponibles et sans initialiser ONNX. Une référence manquante en base est réparée à partir du cache disque. Les fichiers source modifiés ou les miniatures absentes continuent d'être recalculés.
+- Ctrl+A sélectionne les 1 001 photos d'une bibliothèque filtrée, y compris les résultats non chargés dans la grille ; un deuxième appui désélectionne tout. Dans le champ de recherche, il sélectionne le texte. Cmd+A est également reconnu sur macOS. Les dialogues et la visionneuse conservent leurs raccourcis.
+
+Les miniatures persistent sous `%LOCALAPPDATA%/PixSeek/cache` sous Windows, `$XDG_DATA_HOME/PixSeek/cache` (sinon `~/.local/share/PixSeek/cache`) sous Linux et `~/Library/Application Support/PixSeek/cache` sous macOS. Leur clé combine chemin, taille, date de modification et version du traitement. Le scan n'initialise plus le modèle sémantique lorsqu'aucun média ne nécessite une analyse. Le bouton de vidage des caches reste une action explicite qui entraîne leur régénération.
+
+L'asset `PixSeek/Assets/PlaybackWarmup.mp4` (2 340 octets) contient uniquement une mire noire et du silence, générés localement ; aucun média personnel ni contenu tiers n'y figure. Il est embarqué dans l'assembly desktop puis extrait dans `cache/player`. Sa génération est reproductible avec FFmpeg :
+
+```powershell
+./runtimes/win-x64/native/ffmpeg.exe -nostdin -v error -y -f lavfi -i color=c=black:s=16x16:r=10:d=0.4 -f lavfi -i anullsrc=r=44100:cl=mono -t 0.4 -c:v libx264 -profile:v baseline -pix_fmt yuv420p -c:a aac -b:a 16k -movflags +faststart PixSeek/Assets/PlaybackWarmup.mp4
+```
+
+Android utilise son propre lecteur natif et ses propres services de miniatures ; le runtime LibVLC et cet asset desktop ne sont pas référencés par le projet Android.
+
+Validation effectuée sous Windows : **56 tests Release réussis**, rapport `tests/PixSeek.Tests/TestResults/startup-cache-selection.trx`. Le clip H.264 du test affiche sa première frame en environ **106 ms après préparation** ; lors d'un premier processus de test à froid, la préparation native a pris environ **11,3 secondes** en arrière-plan. Il s'agit de mesures sur les médias générés du test, pas d'une garantie pour chaque fichier de la bibliothèque.
+
+Compilations Release réussies sans avertissement pour `win-x64`, `linux-x64`, `osx-arm64`, `osx-x64` et `android-x64`. Android nécessite la préparation des références partagées avec le RID, comme dans `scripts/publish-android.ps1`, puis la compilation Android avec `--no-restore`. Aucune exécution sur un appareil Android, Linux ou macOS n'a été réalisée pour cette révision.

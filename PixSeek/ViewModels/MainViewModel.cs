@@ -18,6 +18,7 @@ public partial class MainViewModel : ObservableObject
     private readonly ModelManager _models;
     private readonly ILogger<MainViewModel> _logger;
     private readonly LibraryMonitor _monitor;
+    private readonly VideoRuntime _videoRuntime;
     private JobControl? _indexControl;
     private readonly DispatcherTimer _refreshTimer;
     private bool _refreshingGallery, _rescanRequested, _stopped;
@@ -53,7 +54,7 @@ public partial class MainViewModel : ObservableObject
     public bool IsSettings => PageIndex == 4;
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
 
-    public MainViewModel(LibraryDatabase db, LibraryIndexer indexer, NativeTools tools, ModelManager models, LibraryViewModel library, OptimizerViewModel optimizer, SettingsViewModel settings, MediaViewerViewModel viewer, LibraryMonitor monitor, ILogger<MainViewModel> logger, PeopleViewModel people)
+    public MainViewModel(LibraryDatabase db, LibraryIndexer indexer, NativeTools tools, ModelManager models, LibraryViewModel library, OptimizerViewModel optimizer, SettingsViewModel settings, MediaViewerViewModel viewer, LibraryMonitor monitor, ILogger<MainViewModel> logger, PeopleViewModel people, VideoRuntime videoRuntime)
     {
         _db = db;
         _indexer = indexer;
@@ -61,6 +62,7 @@ public partial class MainViewModel : ObservableObject
         _models = models;
         _logger = logger;
         _monitor = monitor;
+        _videoRuntime = videoRuntime;
         Library = library;
         Optimizer = optimizer;
         Settings = settings;
@@ -160,6 +162,7 @@ public partial class MainViewModel : ObservableObject
     partial void OnErrorMessageChanged(string value) => OnPropertyChanged(nameof(HasError));
     public async Task InitializeAsync()
     {
+        _ = _videoRuntime.WarmUpAsync();
         _stopped = false;
         People.Resume();
         try

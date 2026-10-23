@@ -2,6 +2,7 @@ using Avalonia;
 using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using PixSeek.ViewModels;
@@ -16,6 +17,18 @@ public partial class MainView : UserControl
         DataContextChanged += (_, _) => Subscribe();
         AttachedToVisualTree += (_, _) => Subscribe();
         DetachedFromVisualTree += (_, _) => Unsubscribe();
+        AddHandler(KeyDownEvent, (_, e) =>
+        {
+            var selectAll = e.Key == Key.A && (e.KeyModifiers == KeyModifiers.Control ||
+                (OperatingSystem.IsMacOS() && e.KeyModifiers == KeyModifiers.Meta));
+            if (!selectAll || DataContext is not MainViewModel { IsGallery: true, IsDialogOpen: false } model ||
+                model.Viewer.IsOpen) return;
+            // Search text and editable fields retain their native Ctrl+A / Cmd+A behavior.
+            if (e.Source is Avalonia.Visual source &&
+                (source is TextBox || source.GetVisualAncestors().OfType<TextBox>().Any())) return;
+            if (model.Library.ToggleAllCommand.CanExecute(null)) model.Library.ToggleAllCommand.Execute(null);
+            e.Handled = true;
+        }, RoutingStrategies.Tunnel);
         KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape && DataContext is MainViewModel { IsPersonDialogOpen: true } personVm)
