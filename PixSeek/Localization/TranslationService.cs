@@ -4,6 +4,7 @@ using System.Text.Json;
 using Avalonia.Data;
 using Avalonia.Data.Converters;
 using Avalonia.Markup.Xaml;
+using PixSeek.Core;
 
 namespace PixSeek.Localization;
 public sealed class TranslationService : INotifyPropertyChanged
@@ -69,6 +70,20 @@ public sealed class CodecLabelConverter : IValueConverter
 {
     public static CodecLabelConverter Instance { get; } = new();
 
-    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value is "Conserver" ? TranslationService.Text("Retain") : value ?? "";
+    public static string LabelFor(string? value) => CompressionCodecs.Normalize(value) switch
+    {
+        "auto" => TranslationService.Text("Auto"),
+        "original" => TranslationService.Text("Retain"),
+        "jxl" => "JPEG XL",
+        "avif" => "AVIF",
+        "heic" => "HEIC",
+        "png" => "PNG",
+        "av1" => "AV1",
+        "hevc" => "H.265 / HEVC",
+        "h264" => "H.264 / AVC",
+        "vp9" => "VP9",
+        _ => value ?? ""
+    };
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => LabelFor(value as string);
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }

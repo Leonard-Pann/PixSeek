@@ -7,8 +7,15 @@ using PixSeek.Infrastructure;
 
 namespace PixSeek.Media;
 public sealed record FolderAnalysis(int Photos, int Videos, long Bytes, IReadOnlyDictionary<string, int> Formats);
-public sealed class MediaCompressionService(LibraryDatabase db, ImageMagickService images, FfprobeService probe, MediaEncoder encoder, CompressionProfileResolver resolver)
+public sealed class MediaCompressionService
 {
+    private readonly LibraryDatabase db;
+    private readonly MediaEncoder encoder;
+    public MediaCompressionService(LibraryDatabase db, ImageMagickService images, FfprobeService probe, MediaEncoder encoder, CompressionProfileResolver resolver)
+    {
+        this.db = db;
+        this.encoder = encoder;
+    }
     public async Task<FolderAnalysis> AnalyzeAsync(string directory, bool recursive, CancellationToken ct, string? destinationDirectory = null)
     {
         var excluded = (await db.CompressionDestinationsAsync(ct)).Concat(destinationDirectory == null ? [] : new[] { Path.GetFullPath(destinationDirectory) }).ToArray();
@@ -45,7 +52,7 @@ public sealed class MediaCompressionService(LibraryDatabase db, ImageMagickServi
         var results = new List<EncodingResult>();
         await using var c = await db.OpenAsync(ct);
         long job;
-        var optionsJson = JsonSerializer.Serialize(new { Options = options, Selection = selectedFiles?.OrderBy(p => p, StringComparer.Ordinal).ToArray() });
+        var optionsJson = JsonSerializer.Serialize(new { AlgorithmVersion = AdaptiveCompressionPolicy.Version, Capabilities = encoder.CapabilitiesFingerprint, Options = options, Selection = selectedFiles?.OrderBy(p => p, StringComparer.Ordinal).ToArray() });
         // Reuse only interrupted jobs with identical options and the same source folder.
         using (var find = c.CreateCommand())
         {
@@ -89,27 +96,26 @@ public sealed class MediaCompressionService(LibraryDatabase db, ImageMagickServi
                 EncodingResult result;
                 try
                 {
-                    var metadata = type == MediaType.Image ? await images.IdentifyAsync(file, ct) : await probe.ProbeAsync(file, ct);
                     var relative = Path.GetRelativePath(directory, file);
                     if (relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) || Path.IsPathRooted(relative))
                         relative = Path.Combine("Sélection", Path.GetFileName(file));
                     var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(file))))[..10].ToLowerInvariant();
                     var stem = Path.Combine(destination, Path.GetDirectoryName(relative) ?? "", Path.GetFileNameWithoutExtension(relative) + "-" + Path.GetExtension(relative).TrimStart('.') + "-" + hash);
-                    var request = new EncodingRequest(file, stem, type, metadata, options);
-                    var plan = resolver.Resolve(request);
-                    var final = stem + plan.Extension;
+                    // The encoder analyzes and prepares this request once, including the final extension.
+                    var request = new EncodingRequest(file, stem, type, new(0, 0, 0, ""), options) { DestinationIsStem = true };
                     using var previous = c.CreateCommand();
                     previous.CommandText = "SELECT Payload FROM CompressionItem WHERE JobId=$j AND SourcePath=$s AND Status='Converti'";
                     previous.Parameters.AddWithValue("$j", job);
                     previous.Parameters.AddWithValue("$s", file);
                     var payload = await previous.ExecuteScalarAsync(ct);
                     var old = payload is string json ? JsonSerializer.Deserialize<EncodingResult>(json) : null;
-                    if (old != null && old.DestinationPath != null && File.Exists(old.DestinationPath) && new FileInfo(old.DestinationPath).Length == old.OutputBytes && new FileInfo(file).Length == old.OriginalBytes && File.GetLastWriteTimeUtc(old.DestinationPath) == File.GetLastWriteTimeUtc(file))
+                    if (old?.Decision?.AlgorithmVersion == AdaptiveCompressionPolicy.Version && old.Decision.SourceFingerprint == MediaEncoder.Fingerprint(file) &&
+                        old.Decision.CapabilitiesFingerprint == encoder.CapabilitiesFingerprint && old.DestinationPath != null && File.Exists(old.DestinationPath) &&
+                        new FileInfo(old.DestinationPath).Length == old.OutputBytes && new FileInfo(file).Length == old.OriginalBytes && File.GetLastWriteTimeUtc(old.DestinationPath) == File.GetLastWriteTimeUtc(file))
                         result = old;
-                    else if (File.Exists(final))
-                        result = new(file, null, new FileInfo(file).Length, new FileInfo(file).Length, "Ignoré", "Sortie existante conservée ; aucun écrasement.");
                     else
-                        result = await encoder.EncodeAsync(request with { DestinationPath = final }, new Progress<EncodingProgress>(p => progress.Report(new($"{Path.GetFileName(file)} · {p.Message}", index, files.Length, (index + p.Fraction) / Math.Max(1, files.Length), Interlocked.Read(ref saved)))), ct);
+                        result = await encoder.EncodeAsync(request, new Progress<EncodingProgress>(p => progress.Report(new($"{Path.GetFileName(file)} · {p.Message}", index, files.Length, (index + p.Fraction) / Math.Max(1, files.Length), Interlocked.Read(ref saved))
+                        { Phase = p.Phase, EstimatedRemaining = p.EstimatedRemaining })), ct, _ => control.CheckpointAsync());
                 }
                 catch (OperationCanceledException)
                 {
@@ -124,12 +130,14 @@ public sealed class MediaCompressionService(LibraryDatabase db, ImageMagickServi
                 results.Add(result);
                 Interlocked.Add(ref saved, result.SavedBytes);
                 using var item = c.CreateCommand();
-                item.CommandText = "INSERT INTO CompressionItem(JobId,SourcePath,DestinationPath,OriginalSizeBytes,OutputSizeBytes,Status,ErrorMessage,VerificationStatus,Payload) VALUES($j,$s,$d,$b,$a,$status,$e,$v,$json) ON CONFLICT(JobId,SourcePath) DO UPDATE SET DestinationPath=$d,OutputSizeBytes=$a,Status=$status,ErrorMessage=$e,VerificationStatus=$v,Payload=$json";
+                item.CommandText = "INSERT INTO CompressionItem(JobId,SourcePath,DestinationPath,SourceCodec,TargetCodec,OriginalSizeBytes,OutputSizeBytes,Status,ErrorMessage,VerificationStatus,Payload) VALUES($j,$s,$d,$sourceCodec,$targetCodec,$b,$a,$status,$e,$v,$json) ON CONFLICT(JobId,SourcePath) DO UPDATE SET DestinationPath=$d,SourceCodec=$sourceCodec,TargetCodec=$targetCodec,OutputSizeBytes=$a,Status=$status,ErrorMessage=$e,VerificationStatus=$v,Payload=$json";
                 foreach (var(k, v)in new (string, object? )[]
                 {
                     ("j", job),
                     ("s", file),
                     ("d", result.DestinationPath),
+                    ("sourceCodec", result.Decision?.SourceCodecId),
+                    ("targetCodec", result.Decision?.CodecId),
                     ("b", result.OriginalBytes),
                     ("a", result.OutputBytes),
                     ("status", result.Status),

@@ -66,14 +66,14 @@ public sealed class RegressionDatabaseTests(TestEnvironment e) : IClassFixture<T
     }
 
     [Fact]
-    public void CodecDefaults_AreCentralizedAndCapabilityAware()
+    public void CodecDefaults_AlwaysDeferToAutomaticSelection()
     {
         var policy = new CompressionCodecPolicy();
         var capabilities = new ToolCapabilities("", "", "libsvtav1", true, true, "", "");
-        Assert.Equal("JPEG XL", policy.ImageDefault(capabilities));
-        Assert.Equal("AV1", policy.VideoDefault(capabilities));
-        Assert.Equal("AVIF", policy.ImageDefault(capabilities with { Jxl = false }));
-        Assert.Equal("Conserver", policy.ImageDefault(null));
-        Assert.Equal("Conserver", policy.VideoDefault(capabilities with { Av1Encoder = null }));
+        Assert.Equal("auto", policy.ImageDefault(capabilities));
+        Assert.Equal("auto", policy.VideoDefault(capabilities));
+        Assert.Equal("auto", policy.ImageDefault(capabilities with { Jxl = false }));
+        Assert.Equal("auto", policy.ImageDefault(null));
+        Assert.Equal("auto", policy.VideoDefault(capabilities with { Av1Encoder = null }));
     }
 }

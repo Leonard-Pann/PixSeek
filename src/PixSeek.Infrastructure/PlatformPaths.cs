@@ -58,7 +58,42 @@ public sealed class SettingsStore(IPlatformPaths paths)
     {
         try
         {
-            return JsonSerializer.Deserialize<UserSettings>(File.ReadAllText(Path.Combine(p.Data, "settings.json"))) ?? new();
+            var json = File.ReadAllText(Path.Combine(p.Data, "settings.json"));
+            var settings = JsonSerializer.Deserialize<UserSettings>(json) ?? new();
+            if (settings.Compression is null) settings = settings with { Compression = new() };
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.TryGetProperty("Compression", out var legacy) &&
+                legacy.ValueKind == JsonValueKind.Object &&
+                (!legacy.TryGetProperty("Version", out var version) || version.ValueKind != JsonValueKind.Number || !version.TryGetInt32(out var number) || number < 2))
+            {
+                // Old simple presets also persisted CRF/distance and concrete codecs. Their
+                // presence cannot establish that the user had explicitly enabled advanced mode.
+                var previous = settings.Compression;
+                var preset = previous.Lossless ? CompressionPreset.PerceptualLossless : (int)previous.Preset switch
+                {
+                    0 => CompressionPreset.PerceptualLossless,
+                    2 => CompressionPreset.BestCompression,
+                    _ => CompressionPreset.Quality
+                };
+                var quality = preset == CompressionPreset.PerceptualLossless ? 90 : preset == CompressionPreset.BestCompression ? 35 : 65;
+                settings = settings with
+                {
+                    Compression = new CompressionOptions
+                    {
+                        Version = 2,
+                        Preset = preset,
+                        ImageCodec = "auto",
+                        VideoCodec = "auto",
+                        ImageAutoQuality = quality,
+                        VideoAutoQuality = quality,
+                        KeepMetadata = previous.KeepMetadata,
+                        KeepOnlySmaller = previous.KeepOnlySmaller,
+                        Recursive = previous.Recursive,
+                        LegacyOptionsJson = legacy.GetRawText()
+                    }
+                };
+            }
+            return settings;
         }
         catch (Exception e)when (e is IOException or JsonException)
         {

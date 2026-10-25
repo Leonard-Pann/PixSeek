@@ -11,7 +11,6 @@ public interface ICompressionCodecPolicy
 
 public sealed class CompressionCodecPolicy : ICompressionCodecPolicy
 {
-    public string ImageDefault(ToolCapabilities? capabilities) => capabilities?.Jxl == true
-        ? "JPEG XL" : capabilities?.Avif == true ? "AVIF" : "Conserver";
-    public string VideoDefault(ToolCapabilities? capabilities) => capabilities?.Av1Encoder != null ? "AV1" : "Conserver";
+    public string ImageDefault(ToolCapabilities? capabilities) => CompressionCodecs.Auto;
+    public string VideoDefault(ToolCapabilities? capabilities) => CompressionCodecs.Auto;
 }

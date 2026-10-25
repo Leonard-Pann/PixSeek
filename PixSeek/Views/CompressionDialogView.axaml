@@ -11,23 +11,61 @@
             <ListBox x:Name="CompressionModes" SelectedIndex="{Binding PresetIndex}" Background="Transparent" BorderThickness="0" Padding="0">
               <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Rows="1" Columns="3" /></ItemsPanelTemplate></ListBox.ItemsPanel>
               <ListBox.Styles><Style Selector="ListBoxItem"><Setter Property="CornerRadius" Value="12" /><Setter Property="Padding" Value="16" /><Setter Property="Margin" Value="0,0,8,0" /><Setter Property="BorderBrush" Value="{DynamicResource LineBrush}" /><Setter Property="BorderThickness" Value="1" /><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style><Style Selector="ListBoxItem:selected"><Setter Property="Background" Value="#226867DF" /><Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" /></Style></ListBox.Styles>
-              <ListBoxItem><StackPanel Spacing="6"><TextBlock Text="{loc:T Quality}" FontWeight="SemiBold" FontSize="15" /><TextBlock Text="{loc:T FidelityPriority}" Classes="subtitle" FontSize="12" /></StackPanel></ListBoxItem>
-              <ListBoxItem><StackPanel Spacing="6"><TextBlock Text="{loc:T Balanced}" FontWeight="SemiBold" FontSize="15" /><TextBlock Text="{loc:T BalancedHint}" Classes="subtitle" FontSize="12" /></StackPanel></ListBoxItem>
+              <ListBoxItem><StackPanel Spacing="6"><TextBlock Text="{loc:T PerceptualLossless}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap" /><TextBlock Text="{loc:T FidelityPriority}" Classes="subtitle" FontSize="12" /></StackPanel></ListBoxItem>
+              <ListBoxItem><StackPanel Spacing="6"><TextBlock Text="{loc:T Quality}" FontWeight="SemiBold" FontSize="15" /><TextBlock Text="{loc:T DefaultCompression}" Classes="subtitle" FontSize="12" /></StackPanel></ListBoxItem>
               <ListBoxItem><StackPanel Spacing="6"><TextBlock Text="{loc:T BestCompression}" FontWeight="SemiBold" FontSize="14" TextWrapping="Wrap" /><TextBlock Text="{loc:T SpacePriority}" Classes="subtitle" FontSize="12" /></StackPanel></ListBoxItem>
             </ListBox>
             <TextBlock Text="{Binding PresetDescription}" Classes="subtitle" FontSize="12" />
           </StackPanel>
+          <StackPanel x:Name="GeneralCompressionOptions" Spacing="8">
+            <CheckBox x:Name="PreserveMetadataOption" Content="{loc:T KeepMetadata}" IsChecked="{Binding KeepMetadata}" />
+            <CheckBox x:Name="KeepSmallerOption" Content="{loc:T KeepSmaller}" IsChecked="{Binding KeepOnlySmaller}" />
+          </StackPanel>
           <ToggleSwitch x:Name="AdvancedToggle" Content="{loc:T Advanced}" IsChecked="{Binding ShowAdvanced}" OnContent="" OffContent="" />
           <StackPanel IsVisible="{Binding ShowAdvanced}" Spacing="18">
-            <Border Background="{DynamicResource SidebarBrush}" CornerRadius="12" Padding="18"><StackPanel Spacing="10"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{loc:T Photos}" Classes="section" /><ComboBox Grid.Column="1" x:Name="ImageCodecChoice" ItemsSource="{Binding ImageCodecs}" SelectedItem="{Binding ImageCodec, Mode=TwoWay}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={x:Static loc:CodecLabelConverter.Instance}}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{loc:T EncodingQuality}" /><TextBlock Grid.Column="1" Text="{Binding ImageQualityLabel}" Classes="subtitle" /></Grid><Slider x:Name="ImageQualitySlider" Value="{Binding ImageQuality}" Minimum="1" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" IsEnabled="{Binding !Lossless}" /><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{loc:T Smaller}" Classes="subtitle" FontSize="11" /><TextBlock Grid.Column="1" Text="{loc:T MoreFaithful}" Classes="subtitle" FontSize="11" /></Grid><CheckBox Content="{loc:T Lossless}" IsChecked="{Binding Lossless}" /></StackPanel></Border>
-            <Border Background="{DynamicResource SidebarBrush}" CornerRadius="12" Padding="18"><StackPanel Spacing="10"><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{loc:T Videos}" Classes="section" /><ComboBox Grid.Column="1" x:Name="VideoCodecChoice" ItemsSource="{Binding VideoCodecs}" SelectedItem="{Binding VideoCodec, Mode=TwoWay}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Converter={x:Static loc:CodecLabelConverter.Instance}}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{loc:T EncodingQuality}" /><TextBlock Grid.Column="1" Text="{Binding VideoQualityLabel}" Classes="subtitle" /></Grid><Slider x:Name="VideoQualitySlider" Value="{Binding VideoQuality}" Minimum="0" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" /><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{loc:T Smaller}" Classes="subtitle" FontSize="11" /><TextBlock Grid.Column="1" Text="{loc:T MoreFaithful}" Classes="subtitle" FontSize="11" /></Grid><TextBlock Text="{loc:T VideoContainer}" Classes="subtitle" FontSize="12" /></StackPanel></Border>
-            <CheckBox Content="{loc:T KeepMetadata}" IsChecked="{Binding KeepMetadata}" /><CheckBox Content="{loc:T KeepSmaller}" IsChecked="{Binding KeepOnlySmaller}" />
+            <TextBlock Text="{loc:T AdvancedVisibilityHint}" Classes="subtitle" FontSize="12" TextWrapping="Wrap" />
+            <Border Background="{DynamicResource SidebarBrush}" CornerRadius="12" Padding="18">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{loc:T Photos}" Classes="section" />
+                  <ComboBox Grid.Column="1" x:Name="ImageCodecChoice" ItemsSource="{Binding ImageCodecs}" SelectedItem="{Binding SelectedImageCodec, Mode=TwoWay}">
+                    <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:CompressionCodecChoice"><TextBlock Text="{Binding Label}" ToolTip.Tip="{Binding UnavailableReason}" /></DataTemplate></ComboBox.ItemTemplate>
+                  </ComboBox>
+                </Grid>
+                <StackPanel IsVisible="{Binding ImageBackendVisible}" Spacing="6"><TextBlock Text="{loc:T EncodingBackend}" /><ComboBox x:Name="ImageEncoderChoice" ItemsSource="{Binding ImageEncoders}" SelectedItem="{Binding SelectedImageEncoder, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate x:DataType="core:EncoderDescriptor"><StackPanel><TextBlock Text="{Binding Id}" /><TextBlock Text="{Binding UnavailableReason}" Classes="subtitle" FontSize="11" TextWrapping="Wrap" /></StackPanel></DataTemplate></ComboBox.ItemTemplate></ComboBox></StackPanel>
+                <TextBlock Text="{Binding ImageCodecStatus}" Classes="subtitle" FontSize="12" TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{loc:T EncodingQuality}" /><TextBlock Grid.Column="1" Text="{Binding ImageQualityLabel}" Classes="subtitle" /></Grid>
+                <Slider x:Name="ImageQualitySlider" Value="{Binding ImageQuality, Mode=TwoWay}" Minimum="{Binding ImageQualityMinimum}" Maximum="{Binding ImageQualityMaximum}" TickFrequency="{Binding ImageQualityStep}" SmallChange="{Binding ImageQualityStep}" IsSnapToTickEnabled="True" IsEnabled="{Binding ImageQualityEnabled}" />
+                <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding ImageQualityLeft}" Classes="subtitle" FontSize="11" /><TextBlock Grid.Column="1" Text="{Binding ImageQualityRight}" Classes="subtitle" FontSize="11" /></Grid>
+                <TextBlock Text="{Binding ImageContainerHint}" Classes="subtitle" FontSize="12" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+            <Border Background="{DynamicResource SidebarBrush}" CornerRadius="12" Padding="18">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{loc:T Videos}" Classes="section" />
+                  <ComboBox Grid.Column="1" x:Name="VideoCodecChoice" ItemsSource="{Binding VideoCodecs}" SelectedItem="{Binding SelectedVideoCodec, Mode=TwoWay}">
+                    <ComboBox.ItemTemplate><DataTemplate x:DataType="vm:CompressionCodecChoice"><TextBlock Text="{Binding Label}" ToolTip.Tip="{Binding UnavailableReason}" /></DataTemplate></ComboBox.ItemTemplate>
+                  </ComboBox>
+                </Grid>
+                <StackPanel IsVisible="{Binding VideoBackendVisible}" Spacing="6"><TextBlock Text="{loc:T EncodingBackend}" /><ComboBox x:Name="VideoEncoderChoice" ItemsSource="{Binding VideoEncoders}" SelectedItem="{Binding SelectedVideoEncoder, Mode=TwoWay}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate x:DataType="core:EncoderDescriptor"><StackPanel><TextBlock Text="{Binding Id}" /><TextBlock Text="{Binding UnavailableReason}" Classes="subtitle" FontSize="11" TextWrapping="Wrap" /></StackPanel></DataTemplate></ComboBox.ItemTemplate></ComboBox></StackPanel>
+                <TextBlock Text="{Binding VideoCodecStatus}" Classes="subtitle" FontSize="12" TextWrapping="Wrap" />
+                <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{loc:T EncodingQuality}" /><TextBlock Grid.Column="1" Text="{Binding VideoQualityLabel}" Classes="subtitle" /></Grid>
+                <Slider x:Name="VideoQualitySlider" Value="{Binding VideoQuality, Mode=TwoWay}" Minimum="{Binding VideoQualityMinimum}" Maximum="{Binding VideoQualityMaximum}" TickFrequency="{Binding VideoQualityStep}" SmallChange="{Binding VideoQualityStep}" IsSnapToTickEnabled="True" IsEnabled="{Binding VideoQualityEnabled}" />
+                <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding VideoQualityLeft}" Classes="subtitle" FontSize="11" /><TextBlock Grid.Column="1" Text="{Binding VideoQualityRight}" Classes="subtitle" FontSize="11" /></Grid>
+                <TextBlock Text="{Binding VideoContainerHint}" Classes="subtitle" FontSize="12" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
           </StackPanel>
         </StackPanel>
         <TextBlock Text="{Binding Analysis}" Classes="subtitle" FontSize="12" />
         <Border IsVisible="{Binding HasValidationError}" Background="#22E58467" CornerRadius="10" Padding="12"><TextBlock Text="{Binding ValidationError}" TextWrapping="Wrap" /></Border>
-        <StackPanel IsVisible="{Binding IsBusy}" Spacing="8"><ProgressBar Value="{Binding Progress}" Height="6" /><TextBlock Text="{Binding ProgressText}" Classes="subtitle" /><Button Content="{loc:T PauseResume}" Command="{Binding PauseCommand}" HorizontalAlignment="Left" /></StackPanel>
-        <StackPanel IsVisible="{Binding HasResults}" Spacing="12"><TextBlock Text="{Binding ResultSummary}" TextWrapping="Wrap" FontSize="17" /><Button Content="{loc:T OpenResult}" Command="{Binding OpenResultCommand}" HorizontalAlignment="Left" /></StackPanel>
+        <StackPanel IsVisible="{Binding IsBusy}" Spacing="8"><ProgressBar Value="{Binding Progress}" Height="6" /><TextBlock Text="{Binding PhaseText}" FontWeight="SemiBold" /><TextBlock Text="{Binding ProgressText}" Classes="subtitle" TextWrapping="Wrap" /><TextBlock Text="{Binding EstimatedRemainingText}" Classes="subtitle" /><Button Content="{loc:T PauseResume}" Command="{Binding PauseCommand}" HorizontalAlignment="Left" /></StackPanel>
+        <StackPanel IsVisible="{Binding HasResults}" Spacing="12">
+          <TextBlock Text="{Binding ResultSummary}" TextWrapping="Wrap" FontSize="17" />
+          <ListBox x:Name="CompressionResults" ItemsSource="{Binding Results}" MaxHeight="220" Background="Transparent">
+            <ListBox.ItemTemplate><DataTemplate x:DataType="core:EncodingResult"><StackPanel Spacing="4" Margin="0,4"><TextBlock Text="{Binding SourcePath}" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding SourcePath}" /><TextBlock Text="{Binding Status}" FontWeight="SemiBold" /><TextBlock Text="{Binding Verification}" TextWrapping="Wrap" Classes="subtitle" FontSize="12" /><TextBlock Text="{Binding Error}" TextWrapping="Wrap" FontSize="12" /></StackPanel></DataTemplate></ListBox.ItemTemplate>
+          </ListBox>
+          <Button Content="{loc:T OpenResult}" Command="{Binding OpenResultCommand}" HorizontalAlignment="Left" />
+        </StackPanel>
         <TextBlock Text="{loc:T OriginalsSafe}" Classes="subtitle" FontSize="12" />
       </StackPanel>
     </ScrollViewer>

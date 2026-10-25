@@ -40,6 +40,11 @@ public static class AppServices
         s.AddSingleton<ILocalEmbeddingService>(provider => provider.GetRequiredService<OnnxEmbeddingService>());
         s.AddSingleton<LibraryIndexer>();
         s.AddSingleton<CompressionProfileResolver>();
+        s.AddSingleton<PhotoMetadataService>();
+        s.AddSingleton<MediaAnalyzer>();
+        s.AddSingleton<PerceptualQualityEvaluator>();
+        s.AddSingleton<EncodingPerformanceEstimator>(provider => new(Path.Combine(provider.GetRequiredService<NativeTools>().CacheDirectory, "encoding-performance-v2.json")));
+        s.AddSingleton<AdaptiveCompressionPlanner>();
         s.AddSingleton<ICompressionCodecPolicy, CompressionCodecPolicy>();
         s.AddSingleton<CompressionVerificationService>();
         s.AddSingleton<MediaEncoder>();

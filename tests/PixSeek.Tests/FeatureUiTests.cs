@@ -51,8 +51,8 @@ public sealed partial class UiTests
             vm.Optimizer.ShowAdvanced = true;
             window.UpdateLayout();
             var dialog = window.GetVisualDescendants().OfType<CompressionDialogView>().Single();
-            Assert.Equal("JPEG XL", dialog.FindControl<ComboBox>("ImageCodecChoice")!.SelectedItem);
-            Assert.Equal("AV1", dialog.FindControl<ComboBox>("VideoCodecChoice")!.SelectedItem);
+            Assert.Equal("auto", Assert.IsType<CompressionCodecChoice>(dialog.FindControl<ComboBox>("ImageCodecChoice")!.SelectedItem).Id);
+            Assert.Equal("auto", Assert.IsType<CompressionCodecChoice>(dialog.FindControl<ComboBox>("VideoCodecChoice")!.SelectedItem).Id);
             dialog.FindControl<ComboBox>("LibraryInputFolder")!.SelectedItem = vm.Optimizer.LibraryFolders.Single(f => f.Id == folder.Id);
             Assert.Equal(fixture, vm.Optimizer.SourceDirectory);
             vm.Optimizer.CancelCommand.Execute(null);

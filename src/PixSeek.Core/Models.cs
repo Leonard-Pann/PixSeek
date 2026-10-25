@@ -7,9 +7,13 @@ public enum MediaType
 
 public enum CompressionPreset
 {
-    Preserve,
-    HighQuality,
-    Maximum
+    PerceptualLossless = 0,
+    Quality = 1,
+    BestCompression = 2,
+    // Numeric aliases keep old job payloads readable. Settings migration is versioned separately.
+    Preserve = PerceptualLossless,
+    HighQuality = Quality,
+    Maximum = BestCompression
 }
 
 public sealed record LibraryFolder(long Id, string Path, string DisplayName, bool Recursive, string Status = "Prêt");
@@ -41,14 +45,42 @@ public sealed record MediaFile
 
 public sealed record SearchResult(MediaFile Media, double Similarity, long? TimestampMilliseconds, string ThumbnailPath);
 public sealed record LibraryStats(long Photos, long Videos, long Folders, long Indexed, long Pending);
-public sealed record WorkProgress(string Message, int Completed = 0, int Total = 0, double Fraction = 0, long SavedBytes = 0, bool IsIndeterminate = false);
-public sealed record MediaMetadata(int Width, int Height, long DurationMilliseconds, string Codec, bool HasAlpha = false, int FrameCount = 1, int AudioStreams = 0, int SubtitleStreams = 0, int TotalStreams = 0, bool Hdr = false, string? RawJson = null);
-public sealed record ToolCapabilities(string FfmpegVersion, string MagickVersion, string? Av1Encoder, bool Jxl, bool Avif, string NativeDirectory, string Details);
+public sealed record WorkProgress(string Message, int Completed = 0, int Total = 0, double Fraction = 0, long SavedBytes = 0, bool IsIndeterminate = false)
+{
+    public string? Phase { get; init; }
+    public TimeSpan? EstimatedRemaining { get; init; }
+}
+public sealed record MediaMetadata(int Width, int Height, long DurationMilliseconds, string Codec, bool HasAlpha = false, int FrameCount = 1, int AudioStreams = 0, int SubtitleStreams = 0, int TotalStreams = 0, bool Hdr = false, string? RawJson = null)
+{
+    public MediaTechnicalMetadata Technical { get; init; } = new();
+}
+public sealed record ToolCapabilities(string FfmpegVersion, string MagickVersion, string? Av1Encoder, bool Jxl, bool Avif, string NativeDirectory, string Details)
+{
+    public IReadOnlyList<EncoderDescriptor> Encoders { get; init; } = [];
+    public bool Heic { get; init; }
+    public bool ImageMetrics { get; init; }
+    public bool Butteraugli { get; init; }
+    public bool VideoMetrics { get; init; }
+    public string? Vmaf1080Model { get; init; }
+    public string? Vmaf4kModel { get; init; }
+    public string Fingerprint { get; init; } = "";
+}
 public sealed record CompressionOptions
 {
-    public CompressionPreset Preset { get; init; } = CompressionPreset.HighQuality;
-    public string ImageCodec { get; init; } = "Auto";
-    public string VideoCodec { get; init; } = "AV1";
+    public const int CurrentVersion = 2;
+    public int Version { get; init; } = CurrentVersion;
+    public CompressionPreset Preset { get; init; } = CompressionPreset.Quality;
+    public string ImageCodec { get; init; } = "auto";
+    public string VideoCodec { get; init; } = "auto";
+    public double ImageAutoQuality { get; init; } = 65;
+    public double VideoAutoQuality { get; init; } = 65;
+    public string? ImageEncoderId { get; init; }
+    public string? VideoEncoderId { get; init; }
+    public string? ImageRateControl { get; init; }
+    public string? VideoRateControl { get; init; }
+    public double? ImageNativeQuality { get; init; }
+    public double? VideoNativeQuality { get; init; }
+    public string? LegacyOptionsJson { get; init; }
     public int? ImageQuality { get; init; }
     public bool Lossless { get; init; }
     public double? Distance { get; init; }
@@ -60,10 +92,18 @@ public sealed record CompressionOptions
     public bool Recursive { get; init; } = true;
 }
 
-public sealed record EncodingRequest(string SourcePath, string DestinationPath, MediaType MediaType, MediaMetadata Metadata, CompressionOptions Options);
-public sealed record EncodingProgress(double Fraction, string Message);
+public sealed record EncodingRequest(string SourcePath, string DestinationPath, MediaType MediaType, MediaMetadata Metadata, CompressionOptions Options)
+{
+    public bool DestinationIsStem { get; init; }
+}
+public sealed record EncodingProgress(double Fraction, string Message)
+{
+    public string? Phase { get; init; }
+    public TimeSpan? EstimatedRemaining { get; init; }
+}
 public sealed record EncodingResult(string SourcePath, string? DestinationPath, long OriginalBytes, long OutputBytes, string Status, string Verification, string? Error = null)
 {
+    public CompressionDecision? Decision { get; init; }
     public long SavedBytes => Status == "Converti" ? OriginalBytes - OutputBytes : 0;
 }
 

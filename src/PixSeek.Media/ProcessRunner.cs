@@ -7,7 +7,7 @@ namespace PixSeek.Media;
 public sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError);
 public sealed class ProcessRunner(ILogger<ProcessRunner> logger)
 {
-    public async Task<ProcessResult> RunAsync(string executable, IEnumerable<string> arguments, CancellationToken ct = default, Action<string>? onOutput = null, TimeSpan? timeout = null)
+    public async Task<ProcessResult> RunAsync(string executable, IEnumerable<string> arguments, CancellationToken ct = default, Action<string>? onOutput = null, TimeSpan? timeout = null, string? workingDirectory = null)
     {
         if (!File.Exists(executable))
             throw new FileNotFoundException($"Outil embarqué absent : {executable}. Exécutez scripts/bootstrap-windows.ps1.", executable);
@@ -23,6 +23,7 @@ public sealed class ProcessRunner(ILogger<ProcessRunner> logger)
                 RedirectStandardError = true
             }
         };
+        if (workingDirectory != null) process.StartInfo.WorkingDirectory = workingDirectory;
         foreach (var a in arguments)
             process.StartInfo.ArgumentList.Add(a);
         logger.LogInformation("Exécution {Tool} ({Count} arguments)", Path.GetFileName(executable), process.StartInfo.ArgumentList.Count);
@@ -82,28 +83,12 @@ public sealed class ProcessRunner(ILogger<ProcessRunner> logger)
         return new(process.ExitCode, stdout.ToString(), stderr.ToString());
     }
 
-    public async Task<string> CheckedAsync(string exe, IEnumerable<string> args, CancellationToken ct = default, Action<string>? output = null, TimeSpan? timeout = null)
+    public async Task<string> CheckedAsync(string exe, IEnumerable<string> args, CancellationToken ct = default, Action<string>? output = null, TimeSpan? timeout = null, string? workingDirectory = null)
     {
-        var r = await RunAsync(exe, args, ct, output, timeout);
+        var r = await RunAsync(exe, args, ct, output, timeout, workingDirectory);
         if (r.ExitCode != 0)
             throw new InvalidOperationException($"{Path.GetFileName(exe)} : {r.StandardError[^Math.Min(2200, r.StandardError.Length)..]}");
         return r.StandardOutput;
     }
 }
 
-public sealed class NativeTools(IPlatformPaths paths, ProcessRunner runner)
-{
-    public string PathFor(string name) => Path.Combine(paths.Native, name + (OperatingSystem.IsWindows() ? ".exe" : ""));
-    public ToolCapabilities? Capabilities { get; private set; }
-
-    public async Task<ToolCapabilities> DetectAsync(CancellationToken ct = default)
-    {
-        var ff = await runner.CheckedAsync(PathFor("ffmpeg"), ["-version"], ct, timeout: TimeSpan.FromSeconds(20));
-        _ = await runner.CheckedAsync(PathFor("ffprobe"), ["-version"], ct, timeout: TimeSpan.FromSeconds(20));
-        var enc = await runner.CheckedAsync(PathFor("ffmpeg"), ["-hide_banner", "-encoders"], ct);
-        var im = await runner.CheckedAsync(PathFor("magick"), ["-version"], ct);
-        var formats = await runner.CheckedAsync(PathFor("magick"), ["identify", "-list", "format"], ct);
-        bool Writable(string format) => System.Text.RegularExpressions.Regex.IsMatch(formats, $@"(?m)^\s*{format}\*?\s+rw");
-        return Capabilities = new(ff.Split('\n')[0], im.Split('\n')[0], enc.Contains("libsvtav1") ? "libsvtav1" : enc.Contains("libaom-av1") ? "libaom-av1" : null, Writable("JXL"), Writable("AVIF"), paths.Native, $"{ff}\n{im}\n{formats}");
-    }
-}

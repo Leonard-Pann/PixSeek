@@ -3,6 +3,7 @@ using PixSeek.Core;
 using PixSeek.Infrastructure;
 using PixSeek.Media;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Runtime.InteropServices;
 using Xunit;
 
 namespace PixSeek.Tests;
@@ -29,7 +30,7 @@ public sealed class TestEnvironment : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        Paths = new(Path.Combine(Root, "artifacts", "tests", Guid.NewGuid().ToString("N")), Path.Combine(Root, "runtimes", "win-x64", "native"));
+        Paths = new(Path.Combine(Root, "artifacts", "tests", Guid.NewGuid().ToString("N")), Path.Combine(Root, "runtimes", RuntimeInformation.RuntimeIdentifier, "native"));
         Db = new(Paths);
         await Db.InitializeAsync();
         Tools = new(Paths, Runner);
