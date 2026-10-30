@@ -4,6 +4,8 @@ using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using Avalonia.Threading;
 using PixSeek.ViewModels;
+using PixSeek.Controls;
+using Avalonia;
 
 namespace PixSeek.Views;
 public partial class LibraryView : UserControl
@@ -33,6 +35,30 @@ public partial class LibraryView : UserControl
     {
         foreach (var scroll in GalleryList.GetVisualDescendants().OfType<ScrollViewer>()) scroll.Offset = default;
     }, DispatcherPriority.Loaded);
+
+    /// <summary>Observe only realized thumbnails intersecting the viewport, after layout/render.
+    /// The caller bounds this one-shot wait; virtualized/offscreen cards never participate.</summary>
+    public async Task WaitForInitialThumbnailsAsync(CancellationToken token)
+    {
+        while (true)
+        {
+            token.ThrowIfCancellationRequested();
+            var ready = await Dispatcher.UIThread.InvokeAsync(() =>
+            {
+                if (DataContext is not LibraryViewModel vm || vm.Cards.Count == 0)
+                    return true;
+                var viewport = new Rect(GalleryList.Bounds.Size);
+                var visible = GalleryList.GetVisualDescendants().OfType<AsyncThumbnail>()
+                    .Where(t => t.IsEffectivelyVisible && t.Bounds.Width > 0 && t.Bounds.Height > 0 &&
+                        t.TranslatePoint(default, GalleryList) is { } origin &&
+                        viewport.Intersects(new Rect(origin, t.Bounds.Size))).ToArray();
+                return visible.Any(t => t.Source != null) ||
+                    (visible.Length > 0 && visible.All(t => t.IsLoadComplete));
+            }, DispatcherPriority.Background);
+            if (ready) return;
+            await Task.Delay(30, token);
+        }
+    }
 
     private void GalleryScrolled(object? sender, ScrollChangedEventArgs e)
     {

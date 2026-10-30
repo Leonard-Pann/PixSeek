@@ -1,4 +1,6 @@
 {
+  "InitialLoadingTitle": "Chargement de vos photos…",
+  "InitialLoadingHint": "Votre photothèque arrive dans un instant.",
   "SearchPlaceholder": "Rechercher une photo, une scène, un souvenir…",
   "Search": "Rechercher",
   "AddFolder": "＋ Ajouter un dossier",

@@ -12,19 +12,15 @@ namespace PixSeek.Media;
 /// <summary>Build/runtime support is only a hint: availability requires a real encode/decode.</summary>
 public sealed class EncoderCapabilityService(NativeTools tools, ProcessRunner runner)
 {
-    private const int Schema = 4;
+    private const int Schema = 5;
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
     private readonly StringBuilder details = new();
 
     public async Task<ToolCapabilities> DetectAsync(CancellationToken ct = default)
     {
-        var ff = await Describe("ffmpeg", ["-version"], ct);
-        var im = await Describe("magick", ["-version"], ct);
-        var list = await Describe("ffmpeg", ["-hide_banner", "-encoders"], ct);
-        var device = await DeviceFingerprint(ct);
-        var fingerprint = await Fingerprint(device, ct);
+        var fingerprint = CacheKey();
         Directory.CreateDirectory(tools.CacheDirectory);
-        var cache = Path.Combine(tools.CacheDirectory, "encoder-capabilities-v4.json");
+        var cache = Path.Combine(tools.CacheDirectory, "encoder-capabilities-v5.json");
         try
         {
             if (File.Exists(cache))
@@ -36,6 +32,10 @@ public sealed class EncoderCapabilityService(NativeTools tools, ProcessRunner ru
         }
         catch (Exception e) when (e is IOException or JsonException or UnauthorizedAccessException) { details.AppendLine($"Capability cache ignored: {e.Message}"); }
 
+        var ff = await Describe("ffmpeg", ["-version"], ct);
+        var im = await Describe("magick", ["-version"], ct);
+        var list = await Describe("ffmpeg", ["-hide_banner", "-encoders"], ct);
+        await DeviceFingerprint(ct);
         var work = Path.Combine(tools.CacheDirectory, "capability-probe-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(work);
         try
@@ -216,24 +216,29 @@ public sealed class EncoderCapabilityService(NativeTools tools, ProcessRunner ru
         return $"exit {result.ExitCode}: " + message[..Math.Min(900, message.Length)].Trim();
     }
 
-    private async Task<string> Fingerprint(string device, CancellationToken ct)
+    // Cache invalidation uses file metadata only. Never read/hash executable contents.
+    private string CacheKey()
     {
-        var value = new StringBuilder($"schema={Schema}|{RuntimeInformation.OSDescription}|{RuntimeInformation.ProcessArchitecture}|{device}");
+        var value = new StringBuilder($"schema={Schema}|{RuntimeInformation.OSDescription}|{RuntimeInformation.ProcessArchitecture}|cpu={Environment.ProcessorCount}");
         foreach (var name in new[] { "ffmpeg", "ffprobe", "magick", "cjxl", "djxl", "avifenc", "avifdec", "heif-enc", "heif-dec", "ssimulacra2", "butteraugli", "vmaf", "exiftool" })
         {
-            var file = tools.PathFor(name);
-            if (!File.Exists(file)) { value.Append('|').Append(name).Append("=missing"); continue; }
-            await using var stream = File.OpenRead(file);
-            value.Append('|').Append(name).Append('=').Append(Convert.ToHexString(await SHA256.HashDataAsync(stream, ct)));
+            AppendFileMetadata(value, tools.PathFor(name));
         }
         foreach (var name in new[] { "vmaf_v1.0.16_3d0h.json", "vmaf_v1.0.16_1d5h_2160.json" })
         {
             var model = tools.ModelPath(name);
-            if (model != null) value.Append('|').Append(name).Append('=').Append(Convert.ToHexString(SHA256.HashData(await File.ReadAllBytesAsync(model, ct))));
+            if (model != null) AppendFileMetadata(value, model);
         }
         var manifest = Path.Combine(tools.NativeDirectory, "compression-dependencies.json");
-        if (File.Exists(manifest)) value.Append(await File.ReadAllTextAsync(manifest, ct));
+        AppendFileMetadata(value, manifest);
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value.ToString())));
+    }
+
+    private static void AppendFileMetadata(StringBuilder value, string path)
+    {
+        var file = new FileInfo(path);
+        value.Append('|').Append(file.FullName).Append(':').Append(file.Exists ? file.Length : -1)
+            .Append(':').Append(file.Exists ? file.LastWriteTimeUtc.Ticks : 0);
     }
 
     private async Task<string> DeviceFingerprint(CancellationToken ct)

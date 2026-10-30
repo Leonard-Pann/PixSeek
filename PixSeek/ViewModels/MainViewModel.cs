@@ -24,6 +24,18 @@ public partial class MainViewModel : ObservableObject
     private bool _refreshingGallery, _rescanRequested, _stopped;
     private int _modelScanRequest;
     private int _facesDirty;
+    private CancellationTokenSource? _startupCancellation;
+    private CancellationTokenSource? _toolsCancellation;
+    private int _compressionOpenRequest;
+    public Task ToolPreparation { get; private set; } = Task.CompletedTask;
+    private Task _toolObservation = Task.CompletedTask;
+    public Task PendingCompressionOpen { get; private set; } = Task.CompletedTask;
+    [ObservableProperty] private bool _isPreparingCompression;
+    // A view supplies a one-shot viewport signal. Headless consumers need no thumbnail wait.
+    public Func<CancellationToken, Task>? WaitForInitialGalleryAsync { get; set; }
+    [ObservableProperty] private bool _isPreparingLibrary = true;
+    public bool IsLibraryInteractive => !IsPreparingLibrary && !IsDialogOpen;
+    partial void OnIsPreparingLibraryChanged(bool value) => OnPropertyChanged(nameof(IsLibraryInteractive));
     public LibraryViewModel Library { get; }
     public OptimizerViewModel Optimizer { get; }
     public SettingsViewModel Settings { get; }
@@ -48,8 +60,8 @@ public partial class MainViewModel : ObservableObject
     private bool _isCompressionDialogOpen;
     [ObservableProperty] private bool _isPersonDialogOpen;
     public bool IsDialogOpen => IsCompressionDialogOpen || IsPersonDialogOpen;
-    partial void OnIsCompressionDialogOpenChanged(bool value) => OnPropertyChanged(nameof(IsDialogOpen));
-    partial void OnIsPersonDialogOpenChanged(bool value) => OnPropertyChanged(nameof(IsDialogOpen));
+    partial void OnIsCompressionDialogOpenChanged(bool value) { OnPropertyChanged(nameof(IsDialogOpen)); OnPropertyChanged(nameof(IsLibraryInteractive)); }
+    partial void OnIsPersonDialogOpenChanged(bool value) { OnPropertyChanged(nameof(IsDialogOpen)); OnPropertyChanged(nameof(IsLibraryInteractive)); }
     public bool IsGallery => PageIndex != 4;
     public bool IsSettings => PageIndex == 4;
     public bool HasError => !string.IsNullOrEmpty(ErrorMessage);
@@ -162,35 +174,53 @@ public partial class MainViewModel : ObservableObject
     partial void OnErrorMessageChanged(string value) => OnPropertyChanged(nameof(HasError));
     public async Task InitializeAsync()
     {
-        _ = _videoRuntime.WarmUpAsync();
+        using var startup = new CancellationTokenSource();
+        _startupCancellation = startup;
+        var token = startup.Token;
         _stopped = false;
         People.Resume();
         try
         {
-            await Task.Run(() => _db.InitializeAsync());
-            try
-            {
-                await _tools.DetectAsync();
-            }
-            catch (Exception e)
-            {
-                ShowError(e.Message);
-            }
-
-            if (_models.FilesPresent)
-                await Task.Run(() => _db.ConfigureVectorsAsync(_models.Version, _models.Manifest.Dimensions, modelName: _models.Name));
-            Optimizer.LoadSettings();
             await Settings.LoadAsync();
-            await Library.LoadAsync();
+            // Let the initial overlay render before starting any synchronous preparation.
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            token.ThrowIfCancellationRequested();
+            _ = _videoRuntime.WarmUpAsync();
+            await Task.Run(() => _db.InitializeAsync(token), token).WaitAsync(token);
+            if (_models.FilesPresent)
+                await Task.Run(() => _db.ConfigureVectorsAsync(_models.Version, _models.Manifest.Dimensions, token, modelName: _models.Name), token).WaitAsync(token);
+            Optimizer.LoadSettings();
+            await Library.LoadAsync().WaitAsync(token);
+            if (IsPreparingLibrary && !HasError && Library.Cards.Count > 0 && WaitForInitialGalleryAsync is { } wait)
+            {
+                using var viewport = CancellationTokenSource.CreateLinkedTokenSource(token);
+                // Safety ceiling for broken decoders, hidden/minimized windows or no realized cards.
+                // This is a maximum wait, never a minimum display duration or progress estimate.
+                viewport.CancelAfter(TimeSpan.FromSeconds(3));
+                try { await wait(viewport.Token).WaitAsync(viewport.Token); }
+                catch (OperationCanceledException) when (!token.IsCancellationRequested) { }
+            }
+            token.ThrowIfCancellationRequested();
+            IsPreparingLibrary = false;
+            // Optional codec probes must not compete with the first viewport or hold its loader.
+            StartToolPreparation();
             Status = TranslationService.Text("Ready");
+            var folders = await _db.FoldersAsync();
+            token.ThrowIfCancellationRequested();
             _refreshTimer.Start();
-            _monitor.Update(await _db.FoldersAsync());
+            _monitor.Update(folders);
             People.QueueIndex();
             await CheckForLibraryChangesAsync();
         }
+        catch (OperationCanceledException) when (token.IsCancellationRequested) { }
         catch (Exception e)
         {
             ShowError(e.Message);
+        }
+        finally
+        {
+            IsPreparingLibrary = false;
+            if (ReferenceEquals(_startupCancellation, startup)) _startupCancellation = null;
         }
     }
 
@@ -213,9 +243,51 @@ public partial class MainViewModel : ObservableObject
 
     public void ShowCompression(IReadOnlyList<string> files)
     {
-        if (!Optimizer.IsBusy)
-            Optimizer.Prepare(files.Count > 0 ? files : null);
         IsCompressionDialogOpen = true;
+        PendingCompressionOpen = OpenCompressionAsync(files.ToArray(), ++_compressionOpenRequest);
+    }
+
+    private void StartToolPreparation()
+    {
+        if (_toolsCancellation is { IsCancellationRequested: false } && !ToolPreparation.IsFaulted) return;
+        _toolsCancellation?.Dispose();
+        _toolsCancellation = new();
+        var token = _toolsCancellation.Token;
+        ToolPreparation = Task.Run(async () => { await _tools.DetectAsync(token); }, token);
+        // Observe background failures even if compression is never opened.
+        _toolObservation = ObserveToolPreparationAsync(ToolPreparation);
+    }
+
+    private async Task ObserveToolPreparationAsync(Task preparation)
+    {
+        try { await preparation; }
+        catch (OperationCanceledException) { }
+        catch (Exception e) { _logger.LogWarning(e, "Compression tools could not be prepared in the background"); }
+    }
+
+    private async Task OpenCompressionAsync(IReadOnlyList<string> files, int request)
+    {
+        StartToolPreparation();
+        IsPreparingCompression = !ToolPreparation.IsCompleted;
+        try
+        {
+            await ToolPreparation;
+            if (!_stopped && request == _compressionOpenRequest && IsCompressionDialogOpen && !Optimizer.IsBusy)
+                Optimizer.Prepare(files.Count > 0 ? files : null);
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception e)
+        {
+            if (!_stopped && request == _compressionOpenRequest)
+            {
+                IsCompressionDialogOpen = false;
+                ShowError(e.Message);
+            }
+        }
+        finally
+        {
+            if (request == _compressionOpenRequest) IsPreparingCompression = false;
+        }
     }
 
     [RelayCommand]
@@ -380,6 +452,9 @@ public partial class MainViewModel : ObservableObject
 
     public void Stop()
     {
+        _toolsCancellation?.Cancel();
+        _startupCancellation?.Cancel();
+        IsPreparingLibrary = false;
         ++_modelScanRequest;
         _stopped = true;
         _refreshTimer.Stop();
@@ -392,11 +467,16 @@ public partial class MainViewModel : ObservableObject
 
     public async Task ShutdownAsync()
     {
+        _toolsCancellation?.Cancel();
+        _startupCancellation?.Cancel();
+        IsPreparingLibrary = false;
         _stopped = true;
         _refreshTimer.Stop();
         Optimizer.Stop();
         Settings.Stop();
         People.Stop();
+        await _toolObservation;
+        await PendingCompressionOpen;
         await CancelAndWaitAsync();
         await Viewer.CloseCommand.ExecuteAsync(null);
         await Settings.PendingSave;

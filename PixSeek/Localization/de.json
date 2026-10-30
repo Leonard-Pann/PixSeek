@@ -1,4 +1,6 @@
 {
+  "InitialLoadingTitle": "Deine Fotos werden geladen…",
+  "InitialLoadingHint": "Deine Mediathek ist gleich bereit.",
   "SearchPlaceholder": "Foto, Szene oder Erinnerung suchen…",
   "Search": "Suchen",
   "AddFolder": "＋ Ordner hinzufügen",

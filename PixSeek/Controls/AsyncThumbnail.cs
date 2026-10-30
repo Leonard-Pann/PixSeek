@@ -10,6 +10,8 @@ public sealed class AsyncThumbnail : Image
 {
     public static readonly StyledProperty<string?> FilePathProperty = AvaloniaProperty.Register<AsyncThumbnail, string?>(nameof(FilePath));
     public string? FilePath { get => GetValue(FilePathProperty); set => SetValue(FilePathProperty, value); }
+    // Read by the initial viewport only; failed/missing thumbnails are settled placeholders.
+    public bool IsLoadComplete { get; private set; }
 
     private Bitmap? _bitmap;
     private CancellationTokenSource? _load;
@@ -32,6 +34,7 @@ public sealed class AsyncThumbnail : Image
         _load?.Cancel();
         _load?.Dispose();
         _load = null;
+        IsLoadComplete = false;
         Source = null;
         _bitmap?.Dispose();
         _bitmap = null;
@@ -43,13 +46,17 @@ public sealed class AsyncThumbnail : Image
         _load?.Cancel();
         _load?.Dispose();
         _load = new();
+        IsLoadComplete = false;
         Source = null;
         _bitmap?.Dispose();
         _bitmap = null;
         var token = _load.Token;
         var path = FilePath;
         if (string.IsNullOrWhiteSpace(path))
+        {
+            IsLoadComplete = true;
             return;
+        }
         Bitmap? bitmap = null;
         try
         {
@@ -81,6 +88,11 @@ public sealed class AsyncThumbnail : Image
         catch (Exception)
         {
             bitmap?.Dispose();
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+                IsLoadComplete = true;
         }
     }
 }

@@ -11,6 +11,7 @@ namespace PixSeek.Views;
 public partial class MainView : UserControl
 {
     private MainViewModel? _subscribed;
+    private Func<CancellationToken, Task>? _initialGalleryWait;
     public MainView()
     {
         InitializeComponent();
@@ -51,6 +52,8 @@ public partial class MainView : UserControl
         if (DataContext is MainViewModel vm)
         {
             _subscribed = vm;
+            _initialGalleryWait = token => this.GetVisualDescendants().OfType<LibraryView>().Single().WaitForInitialThumbnailsAsync(token);
+            vm.WaitForInitialGalleryAsync = _initialGalleryWait;
             vm.PropertyChanged += OnViewModelChanged;
             vm.Viewer.PropertyChanged += OnViewerChanged;
         }
@@ -60,11 +63,14 @@ public partial class MainView : UserControl
     {
         if (_subscribed != null)
         {
+            if (_subscribed.WaitForInitialGalleryAsync == _initialGalleryWait)
+                _subscribed.WaitForInitialGalleryAsync = null;
             _subscribed.PropertyChanged -= OnViewModelChanged;
             _subscribed.Viewer.PropertyChanged -= OnViewerChanged;
         }
 
         _subscribed = null;
+        _initialGalleryWait = null;
     }
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs args)

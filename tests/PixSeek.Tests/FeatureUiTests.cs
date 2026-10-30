@@ -25,6 +25,8 @@ public sealed partial class UiTests
     {
         var vm = await PrepareAsync();
         var services = PixSeek.App.Services;
+        // Other compression tests persist manual codecs; this test specifically exercises defaults.
+        await services.GetRequiredService<SettingsStore>().UpdateAsync(s => s with { Compression = new() });
         var db = services.GetRequiredService<LibraryDatabase>();
         var fixture = Path.Combine(TestEnvironment.FindRoot(), "tests", "fixtures");
         var folder = await db.AddFolderAsync(fixture, true);
@@ -47,6 +49,7 @@ public sealed partial class UiTests
         for (var i = 0; i < 3; i++)
         {
             vm.ShowCompression([]);
+            await vm.PendingCompressionOpen;
             await vm.Optimizer.PendingFolders;
             vm.Optimizer.ShowAdvanced = true;
             window.UpdateLayout();

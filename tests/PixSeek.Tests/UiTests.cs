@@ -198,6 +198,7 @@ public sealed partial class UiTests
         var window = Open(vm);
         await Task.Delay(100);
         vm.Library.CompressCommand.Execute(null);
+        await vm.PendingCompressionOpen;
         Assert.True(vm.IsCompressionDialogOpen);
         Assert.True(vm.Optimizer.IsFolderInput);
         Assert.Equal(1, vm.PageIndex);
@@ -214,6 +215,7 @@ public sealed partial class UiTests
         var compress = button.ContextMenu.Items.OfType<MenuItem>().Single(item => (string? )item.Header == "Compresser");
         compress.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
         button.ContextMenu.Close();
+        await vm.PendingCompressionOpen;
         Assert.True(vm.IsCompressionDialogOpen);
         Assert.False(vm.Optimizer.IsFolderInput);
         Assert.Contains("2 média", vm.Optimizer.Scope);

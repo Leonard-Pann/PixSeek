@@ -1,4 +1,6 @@
 {
+  "InitialLoadingTitle": "Loading your photos…",
+  "InitialLoadingHint": "Your library will be ready in a moment.",
   "SearchPlaceholder": "Search a photo, a scene, a memory…",
   "Search": "Search",
   "AddFolder": "＋ Add a folder",

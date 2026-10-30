@@ -1,4 +1,6 @@
 {
+  "InitialLoadingTitle": "Cargando tus fotos…",
+  "InitialLoadingHint": "Tu fototeca estará lista en un momento.",
   "SearchPlaceholder": "Buscar una foto, una escena, un recuerdo…",
   "Search": "Buscar",
   "AddFolder": "＋ Añadir carpeta",

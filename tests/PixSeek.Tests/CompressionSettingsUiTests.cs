@@ -136,6 +136,7 @@ public sealed partial class UiTests
         await store.UpdateAsync(s => s with { Compression = new() });
         var window = Open(vm);
         vm.ShowCompression([]);
+        await vm.PendingCompressionOpen;
         await vm.Optimizer.PendingFolders;
         window.UpdateLayout();
         var dialog = window.GetVisualDescendants().OfType<CompressionDialogView>().Single();
@@ -155,6 +156,7 @@ public sealed partial class UiTests
         Assert.Equal(100, dialog.FindControl<Slider>("VideoQualitySlider")!.Maximum);
         vm.Optimizer.CancelCommand.Execute(null);
         vm.ShowCompression([]);
+        await vm.PendingCompressionOpen;
         await vm.Optimizer.PendingFolders;
         Assert.Equal("auto", vm.Optimizer.ImageCodec);
         Assert.Equal("auto", vm.Optimizer.VideoCodec);
