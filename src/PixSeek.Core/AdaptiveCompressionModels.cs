@@ -78,6 +78,8 @@ public sealed record MediaStreamMetadata
     public string Title { get; init; } = "";
     public IReadOnlyDictionary<string, int> Disposition { get; init; } = new Dictionary<string, int>();
     public IReadOnlyDictionary<string, string> Tags { get; init; } = new Dictionary<string, string>();
+    public string? SideDataJson { get; init; }
+    public string? ExtraDataHash { get; init; }
     public bool AttachedPicture { get; init; }
     public string TimeBase { get; init; } = "";
     public double StartTimeSeconds { get; init; }

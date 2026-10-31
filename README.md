@@ -89,18 +89,49 @@ Diagnostic sans interface :
 ```text
 PixSeek/                    Interface Avalonia, contrôles, vues et ViewModels
 PixSeek.Desktop/            Point d'entrée desktop et diagnostics CLI
+PixSeek.Android/            Point d'entrée Android, activité et ressources
 src/PixSeek.Core/           Contrats, modèles et contrôle des jobs
 src/PixSeek.Infrastructure/ SQLite, découverte, paramètres, chemins, logs
 src/PixSeek.Media/          Miniatures, métadonnées, compression
 src/PixSeek.AI/             ONNX, modèles, tokenizer, indexation sémantique/faciale
+src/PixSeek.Inference/      Calculs partagés pour les embeddings
+src/PixSeek.Mobile/         Interface et services mobiles partagés
 build/                     Tâche MSBuild de préparation des modèles
 tests/                     Tests et corpus public
-tools/                     Manifestes de modèles et sommes de contrôle natives
+tools/                     Manifestes, outils de packaging et préparation Android
 models/                    Poids téléchargés, ignorés par Git
 runtimes/<RID>/native/      Outils et bibliothèques natifs, ignorés par Git
 scripts/                   Bootstrap, build et publication
 licenses/                  Licences et notices des composants utilisés
 docs/                      Architecture, algorithmes, validations et limites
+.github/                   Workflow GitHub Actions de publication Linux/macOS
+artifacts/                 Sorties générées, caches de build et préparation Android
+TestDataset/               Dataset local privé, ignoré par Git
 ```
 
-Les projets mobiles et navigateur de template ont été retirés. Les sources du projet sont sous [MIT](LICENSE). Les composants tiers conservent leurs conditions : [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [licences conservées](licenses/README.md), [modèles IA](docs/AI_MODELS.md). Les obligations de redistribution des binaires FFmpeg/VLC restent détaillées dans les notices.
+`PixSeek.Desktop` et `PixSeek.Android` sont des **projets sources**. Leurs sous-dossiers `bin/` et `obj/` contiennent les résultats et fichiers intermédiaires de compilation. `build/` contient le code qui prépare les modèles pendant la compilation : il faut le conserver.
+
+`runtimes/` contient les outils natifs propres à PixSeek (FFmpeg, ImageMagick, libjxl, sqlite-vec, dépendances Unix et DLL MSVC locales), pas une copie du SDK .NET. Les projets et les tests utilisent ces fichiers et les copient dans leurs sorties. Les conserver permet de compiler et d'utiliser ces dépendances sans les télécharger de nouveau. Les scripts `bootstrap-windows.ps1`, `bootstrap-unix.ps1` et `prepare-android.ps1` servent à les préparer.
+
+`.github/` ne sert pas à lancer l'application localement. Son workflow automatise les publications Linux/macOS sur GitHub, à la demande ou lors d'un tag `v*` ; son poids est négligeable.
+
+## Nettoyer les fichiers générés
+
+```powershell
+# Voir les suppressions prévues sans toucher aux fichiers.
+pwsh -NoProfile -File scripts/clean-workspace.ps1 -WhatIf
+# Supprimer les sorties de compilation, anciennes publications et caches.
+pwsh -NoProfile -File scripts/clean-workspace.ps1
+```
+
+Le nettoyage cible `bin/`, `obj/`, `TestResults/` et les sorties `artifacts/` des projets. Il conserve les sources, les fichiers versionnés, `licenses/`, `models/`, `runtimes/`, `TestDataset/`, les assets Android préparés (`artifacts/android/assets`) et les clés/mots de passe de signature (`artifacts/android/signing`). Le dossier d'une application en cours d'exécution est préservé ; fermer PixSeek avant une nouvelle passe permet aussi de supprimer sa sortie de compilation. Le cache Visual Studio `.vs/` reste en place pour la session de l'IDE.
+
+Les archives de release, rapports, captures et médias de validation générés sont supprimés. Les références à ces rapports dans `docs/` décrivent les validations historiques ; les fichiers doivent être régénérés pour les consulter. La prochaine compilation recréera ses sorties, y compris les copies de modèles ; les publications et la préparation Android peuvent retélécharger leurs caches et outils de build. Les modèles et assets Android déjà conservés restent disponibles.
+
+Pour développer au quotidien, compiler seulement le projet utile évite de recréer les sorties des tests et des autres plateformes :
+
+```powershell
+dotnet build PixSeek.Desktop/PixSeek.Desktop.csproj -c Release
+```
+
+Les sources du projet sont sous [MIT](LICENSE). Les composants tiers conservent leurs conditions : [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), [licences conservées](licenses/README.md), [modèles IA](docs/AI_MODELS.md). Les obligations de redistribution des binaires FFmpeg/VLC restent détaillées dans les notices.

@@ -74,7 +74,8 @@ public sealed class CompressionProfileResolver(NativeTools tools)
             (6, "5.1" or "5.1(side)") => 256_000, (8, "7.1" or "7.1(wide)" or "7.1(wide-side)") => 320_000, _ => 0
         };
         // Preserve possible object extensions rather than silently flattening the carrier.
-        var copy = rate == 0 || s.Codec is "truehd" or "eac3" or "dts" || (s.Codec == "opus" && (s.BitRate == null || s.BitRate <= rate));
+        var copy = rate == 0 || s.Codec is "truehd" or "eac3" or "dts" || s.ChannelLayout is "5.1(side)" or "7.1(wide)" or "7.1(wide-side)" ||
+            (!string.IsNullOrEmpty(s.SideDataJson) && s.SideDataJson != "[]") || (s.Codec == "opus" && (s.BitRate == null || s.BitRate <= rate));
         return new AudioEncodingPlan(s.Index, i, copy ? s.Codec : "opus", copy ? null : rate, s.Channels, s.ChannelLayout, copy,
             copy ? "Piste déjà adaptée ou disposition/extension conservée." : "Opus VBR, canaux et disposition conservés.");
     }).ToArray();
@@ -88,6 +89,12 @@ public sealed class CompressionProfileResolver(NativeTools tools)
         args.AddRange(["-map_metadata", r.Options.KeepMetadata ? "0" : "-1", "-map_chapters", r.Options.KeepMetadata ? "0" : "-1", "-c", "copy"]);
         foreach (var (stream, outputIndex) in streams.OrderBy(s => s.Index).Select((s, i) => (s, i)))
         {
+            if (r.Options.KeepMetadata)
+            {
+                args.AddRange(["-map_metadata:s:" + outputIndex, "0:s:" + stream.Index]);
+                foreach (var tag in stream.Tags.Where(t => t.Key.ToLowerInvariant() is not ("encoder" or "duration" or "bps" or "number_of_frames" or "number_of_bytes")))
+                    args.AddRange(["-metadata:s:" + outputIndex, tag.Key + "=" + tag.Value]);
+            }
             var flags = stream.Disposition.Where(d => d.Value != 0).Select(d => d.Key).ToArray();
             args.AddRange(["-disposition:" + outputIndex, flags.Length == 0 ? "0" : string.Join('+', flags)]);
         }

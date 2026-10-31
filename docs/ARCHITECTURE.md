@@ -53,9 +53,17 @@ La photothèque est la page initiale. Recherche et filtres partagent la même gr
 
 `CompressionDialogView` est superposé dans le `MainView`, avec arrière-plan désactivé et focus contenu dans le panneau. Le ViewModel configure une source dossier ou une sélection, une destination, trois modes simples et les paramètres avancés.
 
-`MediaEncoder` écrit un fichier temporaire unique dans la destination. `CompressionVerificationService` valide la sortie avant un `File.Move` sans écrasement. Le gain affiché résulte des tailles réelles. `CompressionJob` et `CompressionItem` enregistrent le journal. Une relance du même dossier, de la même destination, de la même sélection et des mêmes options retrouve un travail interrompu ; une sortie déjà validée doit encore correspondre à sa taille et sa date source pour être réutilisée. Les destinations personnalisées sont exclues des scans récursifs ultérieurs. Aucun job ne supprime un original.
+`MediaEncoder` écrit un fichier temporaire unique dans la destination. `CompressionVerificationService` valide la sortie avant un `File.Move` sans écrasement. Le gain affiché résulte des tailles réelles. `CompressionJob` et `CompressionItem` enregistrent le journal. Une relance du même dossier, de la même destination, de la même sélection et des mêmes options retrouve un travail interrompu ; une sortie déjà validée doit encore correspondre aux SHA-256 de sa source et de sa sortie pour être réutilisée. Un ancien dossier d'export situé dans la source est inclus comme les autres sous-dossiers. Aucun job ne supprime un original.
 
 Le système de jobs est volontairement petit : scan/indexation et conversion ont chacun leur contrôle de pause/annulation ; les étapes de scan sont persistées par statut média. Une orchestration générique durable de chaque sous-étape reste à développer.
+
+### Export complet des médias
+
+La compression est un export complet : chaque média est soit réencodé et vérifié, soit copié à l'identique par `OriginalMediaExporter`. Keep original, codec indisponible, HDR non validé, fichier illisible par les outils, échec d'encodage/contrôle ou absence de gain conduisent à une copie avec SHA-256 source/sortie identiques. Les copies conservent l'extension, le nom et l'arborescence source ; les collisions n'écrasent aucun fichier. Les annexes XMP/AAE et sous-titres externes sont également exportés, y compris les compagnons d'une sélection.
+
+L'export d'un dossier parcourt tous ses sous-dossiers et ne masque pas les erreurs d'accès. La destination par défaut est un dossier voisin de la source ; une destination dans la source est refusée, également à travers un lien. La préservation des métadonnées est obligatoire : les anciens réglages de suppression ne sont plus appliqués. ExifTool inventorie aussi les données inconnues, commentaires et données binaires ; les métadonnées QuickTime/XMP/GPS propres au conteneur sont contrôlées en plus de FFprobe. Si le format cible ne les représente pas, la copie de l'original remplace le réencodage.
+
+Toutes les pistes sont mappées explicitement, avec leurs langues, titres et dispositions. Les pistes audio non réencodées, sous-titres et pochettes sont comparés par empreintes de paquets ; les pièces jointes par empreinte de leurs données. La reprise et le contrôle final vérifient les SHA-256 persistés, même si taille et date n'ont pas changé. Les états `Converti` et `Copié` sont des exports réussis ; un échec de copie, une source modifiée ou de nouveaux médias pendant le travail produisent un bilan `Incomplet`, jamais un succès permettant de considérer la source comme entièrement exportée.
 
 ## Mobile futur
 

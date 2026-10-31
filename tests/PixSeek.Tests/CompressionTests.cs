@@ -12,12 +12,14 @@ public sealed class CompressionTests(TestEnvironment e) : IClassFixture<TestEnvi
         var file = await e.ImageAsync("préservation " + Guid.NewGuid() + ext);
         var before = await File.ReadAllBytesAsync(file);
         var meta = await e.Images.IdentifyAsync(file);
-        var request = new EncodingRequest(file, file + ".jxl", MediaType.Image, meta, new() { Preset = CompressionPreset.Preserve, KeepOnlySmaller = false });
+        var request = new EncodingRequest(file, file + ".jxl", MediaType.Image, meta, new() { ImageCodec = "jxl", ImageNativeQuality = 0, Preset = CompressionPreset.Preserve, KeepOnlySmaller = false });
         var result = await e.Encoder.EncodeAsync(request, new Progress<EncodingProgress>(), default);
-        Assert.Equal("Converti", result.Status);
+        Assert.True(result.IsExported, result.Error);
         Assert.True(File.Exists(result.DestinationPath));
         Assert.Equal(before, await File.ReadAllBytesAsync(file));
-        if (reversible)
+        if (result.Status == "Copié")
+            Assert.Equal(before, await File.ReadAllBytesAsync(result.DestinationPath!));
+        else if (reversible)
             Assert.Contains("octet", result.Verification);
         else
             Assert.Contains("Pixels décodés identiques", result.Verification);
@@ -30,8 +32,8 @@ public sealed class CompressionTests(TestEnvironment e) : IClassFixture<TestEnvi
         await e.Runner.CheckedAsync(e.Tools.PathFor("ffmpeg"), ["-nostdin", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=12", "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000", "-t", "2", "-c:v", "libx264", "-crf", "16", "-c:a", "aac", file]);
         var original = await File.ReadAllBytesAsync(file);
         var meta = await e.Probe.ProbeAsync(file);
-        var result = await e.Encoder.EncodeAsync(new(file, file + ".mkv", MediaType.Video, meta, new() { KeepOnlySmaller = false, Speed = 12 }), new Progress<EncodingProgress>(), default);
-        Assert.True(result.Status == "Converti", result.Error);
+        var result = await e.Encoder.EncodeAsync(new(file, file + ".mkv", MediaType.Video, meta, new() { VideoCodec = "av1", VideoEncoderId = "libsvtav1", VideoNativeQuality = 30, KeepOnlySmaller = false, Speed = 12 }), new Progress<EncodingProgress>(), default);
+        Assert.True(result.Status == "Converti", result.Error ?? result.Verification);
         var output = await e.Probe.ProbeAsync(result.DestinationPath!);
         Assert.Equal("av1", output.Codec);
         Assert.Equal(meta.AudioStreams, output.AudioStreams);
@@ -39,12 +41,13 @@ public sealed class CompressionTests(TestEnvironment e) : IClassFixture<TestEnvi
     }
 
     [Fact]
-    public async Task PreserveMode_DoesNotLossilyEncodeVideo()
+    public async Task UnsupportedVideo_IsExportedAsOriginal()
     {
         var file = await e.ImageAsync();
         var result = await e.Encoder.EncodeAsync(new(file, file + ".mkv", MediaType.Video, new(320, 240, 1000, "h264"), new() { Preset = CompressionPreset.Preserve }), new Progress<EncodingProgress>(), default);
-        Assert.Equal("Ignoré", result.Status);
-        Assert.Null(result.DestinationPath);
+        Assert.Equal("Copié", result.Status);
+        Assert.NotNull(result.DestinationPath);
+        Assert.Equal(await File.ReadAllBytesAsync(file), await File.ReadAllBytesAsync(result.DestinationPath));
     }
 
     [Fact]
@@ -53,9 +56,9 @@ public sealed class CompressionTests(TestEnvironment e) : IClassFixture<TestEnvi
         var file = await e.ImageAsync("tiny.png");
         var request = new EncodingRequest(file, file + ".jxl", MediaType.Image, await e.Images.IdentifyAsync(file), new() { Preset = CompressionPreset.Preserve });
         var result = await e.Encoder.EncodeAsync(request, new Progress<EncodingProgress>(), default);
-        Assert.True(result.Status is "Converti" or "Aucun gain", result.Error);
-        if (result.Status == "Aucun gain")
-            Assert.False(File.Exists(request.DestinationPath));
+        Assert.True(result.IsExported, result.Error);
+        if (result.Status == "Copié")
+            Assert.Equal(await File.ReadAllBytesAsync(file), await File.ReadAllBytesAsync(result.DestinationPath!));
         Assert.True(File.Exists(file));
     }
 
@@ -72,9 +75,10 @@ public sealed class CompressionTests(TestEnvironment e) : IClassFixture<TestEnvi
         var file = Path.Combine(e.Work, "corrompu.jpg");
         await File.WriteAllTextAsync(file, "not an image");
         var result = await e.Encoder.EncodeAsync(new(file, file + ".jxl", MediaType.Image, new(10, 10, 0, "JPEG"), new()), new Progress<EncodingProgress>(), default);
-        Assert.Equal("Échec", result.Status);
+        Assert.Equal("Copié", result.Status);
         Assert.True(File.Exists(file));
         Assert.False(File.Exists(file + ".jxl"));
+        Assert.Equal(await File.ReadAllBytesAsync(file), await File.ReadAllBytesAsync(result.DestinationPath!));
     }
 
     [Fact]
@@ -85,13 +89,14 @@ public sealed class CompressionTests(TestEnvironment e) : IClassFixture<TestEnvi
         var meta = await e.Images.IdentifyAsync(file);
         Assert.True(meta.HasAlpha);
         var r = await e.Encoder.EncodeAsync(new(file, file + ".avif", MediaType.Image, meta, new() { ImageCodec = "AVIF", KeepOnlySmaller = false, KeepMetadata = false }), new Progress<EncodingProgress>(), default);
-        Assert.True(r.Status == "Converti", r.Error);
+        Assert.True(r.IsExported, r.Error);
         Assert.True((await e.Images.IdentifyAsync(r.DestinationPath!)).HasAlpha);
         var tiny = Path.Combine(e.Work, "onepixel.png");
         await e.Images.RunAsync(["-size", "1x1", "xc:red", "-strip", tiny]);
         var bigger = await e.Encoder.EncodeAsync(new(tiny, tiny + ".avif", MediaType.Image, await e.Images.IdentifyAsync(tiny), new() { ImageCodec = "AVIF", KeepMetadata = false }), new Progress<EncodingProgress>(), default);
-        Assert.Equal("Aucun gain", bigger.Status);
-        Assert.True(bigger.OutputBytes > bigger.OriginalBytes);
+        Assert.Equal("Copié", bigger.Status);
+        Assert.Equal(bigger.OutputBytes, bigger.OriginalBytes);
+        Assert.Equal(await File.ReadAllBytesAsync(tiny), await File.ReadAllBytesAsync(bigger.DestinationPath!));
         Assert.Equal(0, bigger.SavedBytes);
         Assert.False(File.Exists(tiny + ".avif"));
     }
@@ -113,8 +118,8 @@ public sealed class CompressionTests(TestEnvironment e) : IClassFixture<TestEnvi
         {
             var output = file + preset + ".jxl";
             var r = await e.Encoder.EncodeAsync(new(file, output, MediaType.Image, meta, new() { Preset = preset, KeepOnlySmaller = false }), new Progress<EncodingProgress>(), default);
-            Assert.True(r.Status == "Converti", r.Error);
-            var decoded = await e.Images.IdentifyAsync(output);
+            Assert.True(r.IsExported, r.Error);
+            var decoded = await e.Images.IdentifyAsync(r.DestinationPath!);
             Assert.True(decoded.HasAlpha);
         }
     }

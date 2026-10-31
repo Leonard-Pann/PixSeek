@@ -4,7 +4,7 @@
     <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Spacing="20" Margin="0,0,8,16">
         <StackPanel IsEnabled="{Binding !IsBusy}" Spacing="20">
-          <StackPanel IsVisible="{Binding IsFolderInput}" Spacing="8"><TextBlock Text="{loc:T InputFolder}" FontWeight="SemiBold" /><ComboBox x:Name="LibraryInputFolder" ItemsSource="{Binding LibraryFolders}" SelectedItem="{Binding InputLibraryFolder}" PlaceholderText="{loc:T ImportedFolder}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate x:DataType="core:LibraryFolder"><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox><Grid ColumnDefinitions="*,Auto"><TextBox x:Name="SourceFolderInput" Text="{Binding SourceDirectory}" PlaceholderText="{loc:T InputPlaceholder}" /><Button Grid.Column="1" Content="{loc:T Browse}" Command="{Binding ChooseFolderCommand}" Margin="10,0,0,0" /></Grid><CheckBox Content="{loc:T IncludeSubfolders}" IsChecked="{Binding Recursive}" /></StackPanel>
+          <StackPanel IsVisible="{Binding IsFolderInput}" Spacing="8"><TextBlock Text="{loc:T InputFolder}" FontWeight="SemiBold" /><ComboBox x:Name="LibraryInputFolder" ItemsSource="{Binding LibraryFolders}" SelectedItem="{Binding InputLibraryFolder}" PlaceholderText="{loc:T ImportedFolder}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate x:DataType="core:LibraryFolder"><TextBlock Text="{Binding DisplayName}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox><Grid ColumnDefinitions="*,Auto"><TextBox x:Name="SourceFolderInput" Text="{Binding SourceDirectory}" PlaceholderText="{loc:T InputPlaceholder}" /><Button Grid.Column="1" Content="{loc:T Browse}" Command="{Binding ChooseFolderCommand}" Margin="10,0,0,0" /></Grid><CheckBox Content="{loc:T IncludeSubfolders}" IsChecked="{Binding Recursive}" IsEnabled="False" /></StackPanel>
           <Border IsVisible="{Binding !IsFolderInput}" Background="{DynamicResource SidebarBrush}" CornerRadius="12" Padding="14"><StackPanel Spacing="5"><TextBlock Text="{Binding SelectionDetails}" TextWrapping="Wrap" /><TextBlock Text="{loc:T SelectionOnly}" Classes="subtitle" FontSize="12" /></StackPanel></Border>
           <StackPanel Spacing="8"><TextBlock Text="{loc:T OutputFolder}" FontWeight="SemiBold" /><Grid ColumnDefinitions="*,Auto"><TextBox x:Name="OutputFolderInput" Text="{Binding Destination}" PlaceholderText="{loc:T OutputPlaceholder}" /><Button Grid.Column="1" Content="{loc:T Browse}" Command="{Binding ChooseOutputCommand}" Margin="10,0,0,0" /></Grid></StackPanel>
           <StackPanel Spacing="10"><TextBlock Text="{loc:T CompressionMode}" FontWeight="SemiBold" />
@@ -18,7 +18,7 @@
             <TextBlock Text="{Binding PresetDescription}" Classes="subtitle" FontSize="12" />
           </StackPanel>
           <StackPanel x:Name="GeneralCompressionOptions" Spacing="8">
-            <CheckBox x:Name="PreserveMetadataOption" Content="{loc:T KeepMetadata}" IsChecked="{Binding KeepMetadata}" />
+            <CheckBox x:Name="PreserveMetadataOption" Content="{loc:T KeepMetadata}" IsChecked="{Binding KeepMetadata}" IsEnabled="False" ToolTip.Tip="{loc:T MetadataAlwaysPreserved}" />
             <CheckBox x:Name="KeepSmallerOption" Content="{loc:T KeepSmaller}" IsChecked="{Binding KeepOnlySmaller}" />
           </StackPanel>
           <ToggleSwitch x:Name="AdvancedToggle" Content="{loc:T Advanced}" IsChecked="{Binding ShowAdvanced}" OnContent="" OffContent="" />

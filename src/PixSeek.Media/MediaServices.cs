@@ -28,7 +28,7 @@ public sealed class FfprobeService(NativeTools tools, ProcessRunner runner)
 
     public async Task<MediaMetadata> ProbeAsync(string file, CancellationToken ct = default)
     {
-        var json = await runner.CheckedAsync(tools.PathFor("ffprobe"), ["-v", "error", "-show_format", "-show_streams", "-show_chapters", "-of", "json", file], ct, timeout: TimeSpan.FromMinutes(2));
+        var json = await runner.CheckedAsync(tools.PathFor("ffprobe"), ["-v", "error", "-show_format", "-show_streams", "-show_chapters", "-show_data_hash", "sha256", "-of", "json", file], ct, timeout: TimeSpan.FromMinutes(2));
         return ParseJson(json);
     }
 
@@ -91,7 +91,9 @@ public sealed class FfprobeService(NativeTools tools, ProcessRunner runner)
             Channels = Number(stream, "channels"), SampleRate = Number(stream, "sample_rate"),
             BitRate = long.TryParse(Text(stream, "bit_rate"), CultureInfo.InvariantCulture, out var bitrate) ? bitrate : null,
             Language = tags.GetValueOrDefault("language", ""), Title = tags.GetValueOrDefault("title", ""),
-            Disposition = dispositions, Tags = tags, AttachedPicture = dispositions.GetValueOrDefault("attached_pic") != 0,
+            Disposition = dispositions, Tags = tags, SideDataJson = stream.TryGetProperty("side_data_list", out var sideData) ? sideData.GetRawText() : null,
+            AttachedPicture = dispositions.GetValueOrDefault("attached_pic") != 0,
+            ExtraDataHash = Text(stream, "extradata_hash"),
             TimeBase = Text(stream, "time_base"), StartTimeSeconds = Numeric(stream, "start_time") ?? 0, DurationSeconds = duration
         };
     }

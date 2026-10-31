@@ -246,8 +246,8 @@ public sealed partial class UiTests
         await vm.Optimizer.ValidateCommand.ExecuteAsync(null);
         Assert.True(vm.Optimizer.HasResults, vm.Optimizer.ValidationError);
         Assert.Equal(2, vm.Optimizer.Results.Count);
-        Assert.All(vm.Optimizer.Results, r => Assert.Equal("Converti", r.Status));
-        Assert.Equal(2, Directory.GetFiles(destination, "*.jxl").Length);
+        Assert.All(vm.Optimizer.Results, r => Assert.True(r.IsExported, r.Error));
+        Assert.Equal(2, Directory.GetFiles(destination).Length);
         Assert.Equal(original, await File.ReadAllBytesAsync(selected.Media.FullPath));
         vm.Optimizer.CancelCommand.Execute(null);
         Assert.False(vm.IsCompressionDialogOpen);

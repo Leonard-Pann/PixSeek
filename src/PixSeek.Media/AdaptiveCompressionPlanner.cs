@@ -116,7 +116,8 @@ public sealed class AdaptiveCompressionPlanner(
             var e = selected[0];
             if (r.Options.ImageRateControl is { } mode && mode != e.RateControl) return Skipped(r, "Le contrôle de qualité enregistré ne correspond pas au backend ; reconfigurez le réglage natif.");
             var q = r.Options.ImageNativeQuality ?? (e.CodecId == "jxl" ? r.Options.Distance : r.Options.ImageQuality) ?? e.DefaultQuality;
-            var manual = await Trial(e, q, exact: e.CodecId == "png" || (e.CodecId == "jxl" && q == 0));
+            var manual = await Trial(e, q, reversible: e.CodecId == "jxl" && q == 0 && r.Options.KeepMetadata && r.Metadata.Codec.Equals("JPEG", StringComparison.OrdinalIgnoreCase),
+                exact: e.CodecId == "png" || (e.CodecId == "jxl" && q == 0));
             return manual?.Plan ?? Skipped(r, string.Join(" ; ", reasons));
         }
 

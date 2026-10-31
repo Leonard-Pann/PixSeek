@@ -33,7 +33,7 @@ public sealed class JobTests(TestEnvironment e) : IClassFixture<TestEnvironment>
         using var query = c.CreateCommand();
         query.CommandText = "SELECT Id FROM CompressionJob WHERE Status='Interrompu'";
         var id = (long)(await query.ExecuteScalarAsync())!;
-        var outputFiles = Directory.GetFiles(Path.Combine(root, MediaFormats.OutputFolder), "*.jxl");
+        var outputFiles = Directory.GetFiles(ExportPathPolicy.DefaultDestination(root));
         Assert.Single(outputFiles);
         var first = await File.ReadAllBytesAsync(outputFiles[0]);
         CompressionReport resumed;
@@ -43,8 +43,9 @@ public sealed class JobTests(TestEnvironment e) : IClassFixture<TestEnvironment>
             }));
         Assert.Equal(id, resumed.JobId);
         Assert.Equal(2, resumed.Items.Count);
-        Assert.All(resumed.Items, r => Assert.Equal("Converti", r.Status));
-        Assert.Equal(2, Directory.GetFiles(resumed.Destination, "*.jxl").Length);
+        Assert.True(resumed.IsComplete, resumed.CompletionIssue);
+        Assert.All(resumed.Items, r => Assert.True(r.IsExported, r.Error));
+        Assert.Equal(2, Directory.GetFiles(resumed.Destination).Length);
         Assert.Equal(first, await File.ReadAllBytesAsync(outputFiles[0]));
         Assert.Equal(2, Directory.GetFiles(root).Length);
     }
@@ -59,14 +60,14 @@ public sealed class JobTests(TestEnvironment e) : IClassFixture<TestEnvironment>
         await e.Images.RunAsync(["-size", "120x80", "gradient:navy-orange", source]);
         File.Copy(source, other);
         var original = await File.ReadAllBytesAsync(source);
-        var destination = Path.Combine(root, "Mes exports");
+        var destination = Path.Combine(e.Work, "Mes exports");
         var service = new MediaCompressionService(e.Db, e.Images, e.Probe, e.Encoder, new(e.Tools));
         using var control = new JobControl();
         var report = await service.RunAsync(root, new CompressionOptions { KeepOnlySmaller = false }, control, new ImmediateProgress<WorkProgress>(_ =>
         {
         }), [source], destination);
         var result = Assert.Single(report.Items);
-        Assert.Equal("Converti", result.Status);
+        Assert.True(result.IsExported, result.Error);
         Assert.Equal(source, result.SourcePath);
         Assert.StartsWith(destination + Path.DirectorySeparatorChar, result.DestinationPath);
         Assert.True(File.Exists(result.DestinationPath));

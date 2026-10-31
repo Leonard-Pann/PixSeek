@@ -22,6 +22,19 @@ public sealed class CompressionVerificationService(ImageMagickService images, Ff
         {
             var output = await probe.ProbeAsync(request.DestinationPath, ct);
             ValidateVideoMetadata(request.Metadata, output, plan, request.Options.KeepMetadata);
+            if (request.Options.KeepMetadata) await new ContainerMetadataGuard(tools, runner).VerifyAsync(request.SourcePath, request.DestinationPath, ct);
+            var sourceStreams = request.Metadata.Technical.Streams.OrderBy(s => s.Index).ToArray();
+            var outputStreams = output.Technical.Streams.OrderBy(s => s.Index).ToArray();
+            var copied = sourceStreams.Select((stream, i) => (stream, i)).Where(pair =>
+                pair.stream.CodecType == "subtitle" || pair.stream.AttachedPicture ||
+                (pair.stream.CodecType == "audio" && plan.AudioPlans.Any(a => a.InputIndex == pair.stream.Index && a.Copy))).ToArray();
+            if (copied.Length > 0)
+            {
+                var beforePackets = await CopiedPacketHashesAsync(request.SourcePath, copied.Select(p => p.stream.Index), ct);
+                var afterPackets = await CopiedPacketHashesAsync(request.DestinationPath, copied.Select(p => outputStreams[p.i].Index), ct);
+                if (!beforePackets.SequenceEqual(afterPackets, StringComparer.Ordinal))
+                    throw new InvalidDataException("Une piste audio, un sous-titre ou une pochette annoncés comme copiés ont été modifiés.");
+            }
             if (plan.IsVideoCopy)
             {
                 var sourceHash = await VideoPacketHashesAsync(request.SourcePath, ct);
@@ -87,6 +100,16 @@ public sealed class CompressionVerificationService(ImageMagickService images, Ff
             throw new InvalidDataException("Empreinte des paquets vidéo indisponible.");
         return hashes;
     }
+    private async Task<IReadOnlyList<string>> CopiedPacketHashesAsync(string path, IEnumerable<int> indices, CancellationToken ct)
+    {
+        var args = new List<string> { "-nostdin", "-v", "error", "-i", path };
+        foreach (var index in indices) args.AddRange(["-map", "0:" + index]);
+        args.AddRange(["-c", "copy", "-f", "streamhash", "-hash", "sha256", "-"]);
+        var text = await runner.CheckedAsync(tools.PathFor("ffmpeg"), args, ct);
+        var hashes = text.Split('\n', StringSplitOptions.RemoveEmptyEntries).Where(line => !line.StartsWith('#')).Select(line => line.Trim()).ToArray();
+        if (hashes.Length == 0 || hashes.Any(h => !h.Contains("SHA256=", StringComparison.OrdinalIgnoreCase))) throw new InvalidDataException("Empreinte d'une piste copiée indisponible.");
+        return hashes;
+    }
     public static void ValidatePhotoMetadata(MediaMetadata source, MediaMetadata output, CompressionPlan plan)
     {
         var swap = plan.NormalizesOrientation && source.Technical.Orientation is >= 5 and <= 8;
@@ -138,6 +161,12 @@ public sealed class CompressionVerificationService(ImageMagickService images, Ff
             var s = sourceStreams[i]; var d = outputStreams[i];
             if (s.CodecType != d.CodecType || s.AttachedPicture != d.AttachedPicture) throw new InvalidDataException("Nature ou ordre des pistes modifié.");
             if (s.CodecType != "audio" && i != primaryVideo && s.Codec != d.Codec) throw new InvalidDataException("Codec d'une piste secondaire modifié.");
+            if (s.CodecType == "attachment" && (string.IsNullOrEmpty(s.ExtraDataHash) || s.ExtraDataHash != d.ExtraDataHash))
+                throw new InvalidDataException("Pièce jointe non conservée à l'identique.");
+            if (s.CodecType != "audio" || plan.AudioPlans.Any(a => a.InputIndex == s.Index && a.Copy))
+                ValidateSideData(s, d);
+            if (s.CodecType == "subtitle" && !string.IsNullOrEmpty(s.ExtraDataHash) && s.ExtraDataHash != d.ExtraDataHash)
+                throw new InvalidDataException("En-tête ou styles d'une piste de sous-titres modifiés.");
             if (keepMetadata) ValidateTrackTags(s, d);
         }
         foreach (var audio in plan.AudioPlans)
@@ -147,6 +176,8 @@ public sealed class CompressionVerificationService(ImageMagickService images, Ff
             var d = outputAudio[audio.OutputIndex];
             if (d.Codec != audio.Codec || d.Channels != audio.Channels || !EquivalentLayout(d.ChannelLayout, audio.ChannelLayout)) throw new InvalidDataException("Codec, canaux ou disposition audio différents du plan.");
             if (!audio.Copy && d.SampleRate != 48000) throw new InvalidDataException("Fréquence Opus de sortie invalide.");
+            if (audio.Copy && !string.IsNullOrEmpty(s.ExtraDataHash) && s.ExtraDataHash != d.ExtraDataHash)
+                throw new InvalidDataException("Données complémentaires d'une piste audio copiée modifiées.");
             var sourceVideoStart = primaryVideo >= 0 ? sourceStreams[primaryVideo].StartTimeSeconds : 0;
             var outputVideoStart = primaryVideo >= 0 ? outputStreams[primaryVideo].StartTimeSeconds : 0;
             if (Math.Abs((d.StartTimeSeconds - outputVideoStart) - (s.StartTimeSeconds - sourceVideoStart)) > .1) throw new InvalidDataException("Décalage audio/vidéo supérieur à 100 ms.");
@@ -157,6 +188,20 @@ public sealed class CompressionVerificationService(ImageMagickService images, Ff
             foreach (var (key, value) in before.Metadata.Where(p => IsUserTag(p.Key)))
                 if (!after.Metadata.TryGetValue(key, out var result) || result != value) throw new InvalidDataException("Métadonnée vidéo non conservée : " + key + ".");
             ValidateChapters(before.Metadata.GetValueOrDefault("pixseek:chapters"), after.Metadata.GetValueOrDefault("pixseek:chapters"));
+        }
+    }
+    private static void ValidateSideData(MediaStreamMetadata source, MediaStreamMetadata output)
+    {
+        if (string.IsNullOrEmpty(source.SideDataJson)) return;
+        var before = System.Text.Json.Nodes.JsonNode.Parse(source.SideDataJson)?.AsArray();
+        var after = System.Text.Json.Nodes.JsonNode.Parse(output.SideDataJson ?? "[]")?.AsArray();
+        if (before == null) return;
+        foreach (var item in before)
+        {
+            // Encoder buffer sizing is regenerated; spatial, colour and other auxiliary data must survive.
+            if (item?["side_data_type"]?.GetValue<string>() == "CPB properties") continue;
+            if (after == null || !after.Any(value => System.Text.Json.Nodes.JsonNode.DeepEquals(item, value)))
+                throw new InvalidDataException("Données auxiliaires de piste non conservées : " + item?["side_data_type"] + ".");
         }
     }
     private static void ValidateTrackTags(MediaStreamMetadata source, MediaStreamMetadata output)

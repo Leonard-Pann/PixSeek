@@ -6,7 +6,7 @@ namespace PixSeek.Media;
 public sealed record QualityTargets(double ImageScore, double ImageWindowScore, double VideoMean, double VideoPercentile5, double? Butteraugli);
 public static class AdaptiveCompressionPolicy
 {
-    public const string Version = "adaptive-v2.0";
+    public const string Version = "adaptive-v2.1-complete-export";
     private static readonly double[] Anchors = [0, 35, 65, 90, 100];
     public static double PresetQuality(CompressionPreset preset) => (int)preset switch { 0 => 90, 2 => 35, _ => 65 };
     public static QualityTargets Targets(double quality)

@@ -147,6 +147,7 @@ public sealed partial class UiTests
         Assert.True(metadata.IsEffectivelyVisible);
         Assert.True(smaller.IsEffectivelyVisible);
         Assert.True(metadata.IsChecked);
+        Assert.False(metadata.IsEnabled);
         Assert.True(smaller.IsChecked);
         Assert.Equal("auto", vm.Optimizer.CurrentOptions.ImageCodec);
         Assert.Equal("auto", vm.Optimizer.CurrentOptions.VideoCodec);

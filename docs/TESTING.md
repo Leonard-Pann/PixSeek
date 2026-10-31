@@ -105,3 +105,19 @@ Android utilise son propre lecteur natif et ses propres services de miniatures ;
 Validation effectuée sous Windows : **56 tests Release réussis**, rapport `tests/PixSeek.Tests/TestResults/startup-cache-selection.trx`. Le clip H.264 du test affiche sa première frame en environ **106 ms après préparation** ; lors d'un premier processus de test à froid, la préparation native a pris environ **11,3 secondes** en arrière-plan. Il s'agit de mesures sur les médias générés du test, pas d'une garantie pour chaque fichier de la bibliothèque.
 
 Compilations Release réussies sans avertissement pour `win-x64`, `linux-x64`, `osx-arm64`, `osx-x64` et `android-x64`. Android nécessite la préparation des références partagées avec le RID, comme dans `scripts/publish-android.ps1`, puis la compilation Android avec `--no-restore`. Aucune exécution sur un appareil Android, Linux ou macOS n'a été réalisée pour cette révision.
+
+## Export complet des médias (30 octobre 2026)
+
+Validation Windows : **94 tests réussis**, zéro échec, rapport `tests/PixSeek.Tests/TestResults/complete-export-validation.trx`. La compilation des projets et du XAML Avalonia réussit sans erreur ni avertissement. Les outils natifs déjà installés ont été utilisés ; la préparation des modèles IA a été désactivée pendant cette compilation de validation.
+
+```powershell
+dotnet test tests/PixSeek.Tests/PixSeek.Tests.csproj --no-build --no-restore --filter 'FullyQualifiedName~CompleteExportTests|FullyQualifiedName~MultiTrackExportTests|FullyQualifiedName~CompressionTests|FullyQualifiedName~JobTests|FullyQualifiedName~AdaptiveMediaIntegrity|FullyQualifiedName~CompressionSettings|FullyQualifiedName~AdaptiveCompressionPolicyTests|FullyQualifiedName~UiTests.Compression' --logger 'trx;LogFileName=complete-export-validation.trx'
+```
+
+`CompleteExportTests` vérifie la copie sans outils natifs, les erreurs d'encodage et de copie, l'absence d'écrasement, les sous-dossiers et noms identiques, les fichiers RAW et formats non réencodables, les annexes XMP/JSON/sous-titres, les anciens exports dans la source, l'annulation, la reprise et la détection de corruption malgré une taille/date inchangées. Un média ajouté pendant le traitement doit rendre l'export incomplet.
+
+`MultiTrackExportTests` produit de vrais clips avec deux pistes audio, deux pistes de sous-titres, leurs langues/titres/dispositions, des chapitres et une pièce jointe. Les réencodages H.264, HEVC, AV1 et VP9 doivent réellement réussir, puis passer les contrôles de pistes et de métadonnées. Les pertes de métadonnées PNG ou XMP dans MP4 doivent au contraire provoquer une copie SHA-256 identique de l'original. Les tests d'intégrité couvrent aussi alpha, ICC, orientation, données auxiliaires et pièces jointes altérées. Les tests d'interface vérifient l'export d'une sélection et la préservation obligatoire des métadonnées.
+
+Les noms accentués passent par des fichiers d'arguments UTF-8 pour ExifTool, conformément à sa [documentation Windows Unicode](https://exiftool.org/faq.html#Q18). Une métadonnée inconnue ou ambiguë non vérifiable impose une copie de l'original. Les informations techniques régénérées par le nouveau codec ou conteneur (index de paquets, tailles, contrôle d'encodeur) sont distinguées des métadonnées descriptives à conserver.
+
+Ces essais utilisent de petits médias synthétiques locaux. Ils ne constituent pas une validation exhaustive des appareils photo, conteneurs propriétaires ou fichiers longs, ni une exécution sur Linux/macOS.

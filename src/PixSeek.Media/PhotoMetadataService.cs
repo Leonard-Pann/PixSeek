@@ -43,10 +43,11 @@ public sealed class PhotoMetadataService(NativeTools tools, ProcessRunner runner
     private static readonly HashSet<string> DerivedTags = new(StringComparer.OrdinalIgnoreCase)
     {
         "Orientation", "ImageWidth", "ImageHeight", "ExifImageWidth", "ExifImageHeight", "PixelXDimension", "PixelYDimension",
-        "ThumbnailOffset", "ThumbnailLength", "ThumbnailImage", "PreviewImage", "PreviewImageStart", "PreviewImageLength",
+        "ThumbnailOffset", "ThumbnailLength", "PreviewImageStart", "PreviewImageLength",
         "StripOffsets", "StripByteCounts", "RowsPerStrip", "TileOffsets", "TileByteCounts", "Compression", "BitsPerSample",
         "SamplesPerPixel", "PhotometricInterpretation", "PlanarConfiguration", "YCbCrSubSampling", "YCbCrPositioning",
-        "IPTCDigest", "CurrentIPTCDigest", "ImageDataHash", "ImageSize", "Megapixels"
+        "IPTCDigest", "CurrentIPTCDigest", "ImageDataHash", "ImageSize", "Megapixels",
+        "ImageBitDepth", "BitDepth", "ColorType", "Filter", "Interlace", "JPEGProcess", "EncodingProcess", "ColorComponents"
     };
 
     public bool Available => File.Exists(tools.PathFor("exiftool"));
@@ -58,22 +59,18 @@ public sealed class PhotoMetadataService(NativeTools tools, ProcessRunner runner
         var hash = critical.GetValueOrDefault("iccHash", "");
         if (!Available)
         {
-            var descriptive = profiles.Split([',', ' '], StringSplitOptions.RemoveEmptyEntries)
-                .Any(p => p.Equals("exif", StringComparison.OrdinalIgnoreCase) || p.Equals("xmp", StringComparison.OrdinalIgnoreCase) ||
-                    p.Equals("iptc", StringComparison.OrdinalIgnoreCase) || p.Equals("8bim", StringComparison.OrdinalIgnoreCase));
             var values = new Dictionary<string, string>();
             if (!string.IsNullOrEmpty(critical.GetValueOrDefault("captureDate"))) values["ExifIFD:DateTimeOriginal"] = critical["captureDate"];
             return new()
             {
-                Values = values, Profiles = profiles, IccHash = hash, Complete = !descriptive,
-                Issue = descriptive ? "ExifTool absent : les métadonnées descriptives ne peuvent pas être transférées et vérifiées intégralement." : null
+                Values = values, Profiles = profiles, IccHash = hash, Complete = false,
+                Issue = "ExifTool absent : la conservation de toutes les métadonnées ne peut pas être vérifiée."
             };
         }
 
-        var result = await runner.RunAsync(tools.PathFor("exiftool"),
-            ["-json", "-G1", "-s", "-n", "-struct", "-EXIF:all", "-XMP:all", "-IPTC:all", "-MakerNotes:all", "-Photoshop:all",
-             "-MPF:all", "-QuickTime:all", "-FileType", "-Orientation", "-ImageWidth", "-ImageHeight", "-Warning", "-Error", file],
-            ct, timeout: TimeSpan.FromMinutes(2));
+        var result = await ExifToolCommand.RunAsync(tools, runner,
+            ["-charset", "filename=UTF8", "-json", "-G1", "-s", "-n", "-struct", "-a", "-U", "-b", "-all", file],
+            ct);
         if (result.ExitCode != 0) throw new InvalidDataException("Lecture des métadonnées impossible : " + result.StandardError.Trim());
         var snapshot = ParseExifToolJson(result.StandardOutput, profiles, hash);
         if (result.StandardError.Contains("Brotli", StringComparison.OrdinalIgnoreCase) && result.StandardError.Contains("install", StringComparison.OrdinalIgnoreCase))
@@ -95,7 +92,8 @@ public sealed class PhotoMetadataService(NativeTools tools, ProcessRunner runner
             if (p.Name == "SourceFile") continue;
             var text = p.Value.ValueKind is JsonValueKind.String ? p.Value.GetString() ?? "" : p.Value.GetRawText();
             if (p.Name is "ExifTool:Warning" or "ExifTool:Error") { issue = text; continue; }
-            values[p.Name] = text;
+            if (!values.TryAdd(p.Name, text) && IsDescriptiveTag(p.Name) && !DerivedTags.Contains(TagName(p.Name)))
+                issue = "Métadonnée répétée sans identité distincte : " + p.Name;
             if (p.Name == "IFD0:Orientation" && int.TryParse(text, out var value) && value is >= 1 and <= 8) orientation = value;
         }
         return new() { Values = values, Profiles = profiles, IccHash = iccHash, Complete = issue == null, Issue = issue, Orientation = orientation };
@@ -121,8 +119,8 @@ public sealed class PhotoMetadataService(NativeTools tools, ProcessRunner runner
         if (!request.Options.KeepMetadata)
         {
             if (Available)
-                await runner.CheckedAsync(tools.PathFor("exiftool"),
-                    ["-overwrite_original", "-EXIF:all=", "-XMP:all=", "-IPTC:all=", "-Photoshop:all=", "-Comment=", request.DestinationPath], ct);
+                await ExifToolCommand.CheckedAsync(tools, runner,
+                    ["-charset", "filename=UTF8", "-overwrite_original", "-EXIF:all=", "-XMP:all=", "-IPTC:all=", "-Photoshop:all=", "-Comment=", request.DestinationPath], ct);
             return;
         }
 
@@ -131,7 +129,7 @@ public sealed class PhotoMetadataService(NativeTools tools, ProcessRunner runner
         if (PreservationIssue(source, codec) is { } issue) throw new InvalidDataException(issue);
         if (!Available) return; // Metadata-free source, checked above; ICC travels through the pixel encoder.
 
-        var args = new List<string> { "-overwrite_original", "-TagsFromFile", request.SourcePath, "-EXIF", "-XMP" };
+        var args = new List<string> { "-charset", "filename=UTF8", "-overwrite_original", "-TagsFromFile", request.SourcePath, "-EXIF", "-XMP" };
         if (codec.Equals("png", StringComparison.OrdinalIgnoreCase)) args.Add("-IPTC");
         else AddIptcMapping(args, source);
 
@@ -141,8 +139,7 @@ public sealed class PhotoMetadataService(NativeTools tools, ProcessRunner runner
         {
             if (hasExif) args.Add("-IFD0:Orientation#=1");
             if (source.Values.ContainsKey("XMP-tiff:Orientation")) args.Add("-XMP-tiff:Orientation#=1");
-            // Embedded previews describe the previous raster and must not retain stale orientation/dimensions.
-            if (hasExif) args.Add("-ThumbnailImage=");
+            // Keep embedded previews too; their loss is detected by the full metadata inventory.
         }
         var width = plan.Width > 0 ? plan.Width : request.Metadata.Width;
         var height = plan.Height > 0 ? plan.Height : request.Metadata.Height;
@@ -160,7 +157,7 @@ public sealed class PhotoMetadataService(NativeTools tools, ProcessRunner runner
             if (source.Values.ContainsKey("XMP-tiff:ImageHeight")) args.Add($"-XMP-tiff:ImageHeight={height}");
         }
         args.Add(request.DestinationPath);
-        await runner.CheckedAsync(tools.PathFor("exiftool"), args, ct);
+        await ExifToolCommand.CheckedAsync(tools, runner, args, ct);
     }
 
     private static void AddIptcMapping(List<string> args, PhotoMetadataSnapshot source)
@@ -196,7 +193,7 @@ public sealed class PhotoMetadataService(NativeTools tools, ProcessRunner runner
         if (!result.Complete) throw new InvalidDataException(result.Issue ?? "L'inventaire des métadonnées de sortie est incomplet.");
         foreach (var (key, value) in source.Values)
         {
-            if (!IsDescriptiveTag(key) || DerivedTags.Contains(TagName(key)) || key.StartsWith("IFD1:", StringComparison.OrdinalIgnoreCase)) continue;
+            if (!IsDescriptiveTag(key) || DerivedTags.Contains(TagName(key))) continue;
             var target = key;
             if (key.StartsWith("IPTC:", StringComparison.OrdinalIgnoreCase) && !codecId.Equals("png", StringComparison.OrdinalIgnoreCase))
             {
@@ -213,7 +210,7 @@ public sealed class PhotoMetadataService(NativeTools tools, ProcessRunner runner
     private static bool IsDescriptiveTag(string key)
     {
         var group = key.Split(':')[0];
-        return group is not ("File" or "System" or "ExifTool" or "Composite" or "QuickTime" or "MPF" or "Jpeg2000") &&
+        return group is not ("File" or "System" or "ExifTool" or "Composite") &&
             !group.StartsWith("ICC", StringComparison.OrdinalIgnoreCase) && !group.StartsWith("Track", StringComparison.OrdinalIgnoreCase);
     }
 

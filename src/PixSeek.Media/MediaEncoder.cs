@@ -38,6 +38,8 @@ public sealed class MediaEncoder : IMediaEncoder
     public async Task<EncodingResult> EncodeAsync(EncodingRequest request, IProgress<EncodingProgress> progress, CancellationToken ct, Func<CancellationToken, Task>? checkpoint)
     {
         var clock = Stopwatch.StartNew();
+        // Complete exports never discard metadata, even when opening legacy settings that disabled it.
+        request = request with { Options = request.Options with { KeepMetadata = true } };
         var source = new FileInfo(request.SourcePath);
         var original = source.Length; var modified = source.LastWriteTimeUtc;
         var sourceFingerprint = Fingerprint(source.FullName);
@@ -45,24 +47,26 @@ public sealed class MediaEncoder : IMediaEncoder
         string? workspace = null, temp = null;
         PreparedCompressionPlan? prepared = null;
         var hasVideoGate = false;
+        string? sourceSha256 = null;
         try
         {
             if (CompressionCodecs.Normalize(request.MediaType == MediaType.Image ? request.Options.ImageCodec : request.Options.VideoCodec) == "original")
-                return new(request.SourcePath, null, original, original, "Ignoré", "Keep original : aucune transformation, y compris audio et métadonnées.");
+                return await CopyOriginal("Keep original : aucun réencodage image, vidéo ou audio.");
             if (request.MediaType == MediaType.Video) { await VideoGate.WaitAsync(ct); hasVideoGate = true; }
             if (_tools.Capabilities == null) await _tools.DetectAsync(ct);
             progress.Report(new(.01, "Analyse du média et des capacités") { Phase = "Analysis" });
+            sourceSha256 = await OriginalMediaExporter.HashAsync(request.SourcePath, ct);
             var actualMetadata = await _analyzer.AnalyzeAsync(request.SourcePath, request.MediaType, ct);
             request = request with { Metadata = actualMetadata };
             Directory.CreateDirectory(destinationDirectory);
             workspace = Path.Combine(destinationDirectory, ".pixseek-compression-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(workspace);
             prepared = await _planner.PrepareAsync(request, workspace, progress, ct, checkpoint);
-            if (prepared.SkipReason != null) return WithDecision(new(request.SourcePath, null, original, original, "Ignoré", prepared.SkipReason), prepared);
+            if (prepared.SkipReason != null) return await CopyOriginal(prepared.SkipReason);
             var final = request.DestinationIsStem ? request.DestinationPath + prepared.Command.Extension : Path.ChangeExtension(request.DestinationPath, prepared.Command.Extension);
             if (string.Equals(Path.GetFullPath(final), source.FullName, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
-                return WithDecision(new(request.SourcePath, null, original, original, "Ignoré", "Une sortie ne peut pas remplacer son original."), prepared);
-            if (File.Exists(final)) return WithDecision(new(request.SourcePath, null, original, original, "Ignoré", "Sortie existante conservée ; aucun écrasement."), prepared);
+                throw new IOException("Une sortie ne peut pas remplacer son original.");
+            if (File.Exists(final)) return await CopyOriginal("La sortie réencodée existe déjà ; export de l'original sans écrasement.");
             temp = Path.Combine(destinationDirectory, ".pixseek-" + Guid.NewGuid().ToString("N") + ".partial" + prepared.Command.Extension);
             var estimate = Math.Max(0, prepared.EstimatedSeconds - clock.Elapsed.TotalSeconds);
             progress.Report(new(.35, prepared.Reason) { Phase = "Encoding", EstimatedRemaining = TimeSpan.FromSeconds(estimate) });
@@ -90,39 +94,64 @@ public sealed class MediaEncoder : IMediaEncoder
                 var report = await _evaluator.EvaluateVideoAsync(request.SourcePath, temp, request.Metadata,
                     AdaptiveCompressionPolicy.Targets(request.Options.VideoAutoQuality), workspace, true, (int)request.Options.Preset == 0, ct);
                 prepared = prepared with { QualityReport = report };
-                if (!report.Passed) return WithDecision(new(request.SourcePath, null, original, original, "Ignoré", "Contrôle perceptuel final insuffisant ; original conservé. " + report.Details), prepared);
+                if (!report.Passed) return await CopyOriginal("Contrôle perceptuel final insuffisant. " + report.Details);
                 verified += " Fidélité évaluée sur échantillons (VMAF v1).";
             }
             source.Refresh();
-            if (!source.Exists || source.Length != original || source.LastWriteTimeUtc != modified)
+            if (!source.Exists || source.Length != original || source.LastWriteTimeUtc != modified || await OriginalMediaExporter.HashAsync(request.SourcePath, ct) != sourceSha256)
                 throw new IOException("Source modifiée pendant la conversion ; résultat non validé.");
             var size = new FileInfo(temp).Length;
             if (request.Options.KeepOnlySmaller && size >= original)
-                return WithDecision(new(request.SourcePath, null, original, size, "Aucun gain", verified), prepared);
+                return await CopyOriginal("Le réencodage ne réduit pas la taille finale ; original exporté à l'identique.");
+            var outputSha256 = await OriginalMediaExporter.HashAsync(temp, ct);
             ct.ThrowIfCancellationRequested();
             File.Move(temp, final, false);
             try { File.SetLastWriteTimeUtc(final, modified); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
             progress.Report(new(1, verified) { Phase = "Completed", EstimatedRemaining = TimeSpan.Zero });
-            return WithDecision(new(request.SourcePath, final, original, size, "Converti", verified), prepared);
+            return WithDecision(new(request.SourcePath, final, original, size, "Converti", verified)
+            { SourceSha256 = sourceSha256, OutputSha256 = outputSha256 }, prepared);
         }
         catch (OperationCanceledException) { throw; }
         catch (Exception e)
         {
-            var result = new EncodingResult(request.SourcePath, null, original, original, "Échec", "Non validé", e.Message);
-            return prepared == null ? result : WithDecision(result, prepared);
+            try { return await CopyOriginal("Réencodage non validé : " + e.Message); }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception copyError)
+            {
+                var result = new EncodingResult(request.SourcePath, null, original, original, "Échec", "Export incomplet : la copie de l'original a également échoué.", e.Message + " ; copie : " + copyError.Message);
+                return prepared == null ? result : WithDecision(result, prepared);
+            }
         }
+
         finally
         {
             if (temp != null && File.Exists(temp)) File.Delete(temp);
             if (workspace != null && Directory.Exists(workspace))
             {
-                // Workspace is an exact, freshly-created directory owned by this operation.
                 try { Directory.Delete(workspace, true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
             }
             if (hasVideoGate) VideoGate.Release();
             await _performance.SaveAsync(CancellationToken.None);
         }
 
+        async Task<EncodingResult> CopyOriginal(string reason)
+        {
+            // Release rejected candidates before copying: otherwise a large failed encode can fill the destination disk.
+            if (temp != null && File.Exists(temp)) { File.Delete(temp); temp = null; }
+            if (workspace != null && Directory.Exists(workspace))
+            {
+                try { Directory.Delete(workspace, true); workspace = null; } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            }
+            var copied = await new OriginalMediaExporter().CopyAsync(request, reason, progress, ct);
+            sourceFingerprint = Fingerprint(request.SourcePath);
+            var copyPlan = new PreparedCompressionPlan
+            {
+                Command = new(Path.GetExtension(copied.DestinationPath!), "", [], true, false)
+                { CodecId = request.Metadata.Codec, EncoderId = "original-copy", RateControl = "copy", Width = request.Metadata.Width, Height = request.Metadata.Height, IsVideoCopy = request.MediaType == MediaType.Video },
+                SourceMetadata = request.Metadata, IsAutomatic = CompressionCodecs.Normalize(request.MediaType == MediaType.Image ? request.Options.ImageCodec : request.Options.VideoCodec) == "auto", Reason = reason
+            };
+            return WithDecision(copied, copyPlan);
+        }
         EncodingResult WithDecision(EncodingResult result, PreparedCompressionPlan plan) => result with
         {
             Decision = new()

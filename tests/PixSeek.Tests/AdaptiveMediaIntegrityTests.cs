@@ -18,7 +18,7 @@ public sealed class AdaptiveMediaIntegrityTests
            "bit_rate":"192000","start_time":"0.021","duration_ts":600000,"time_base":"1/48000","tags":{"language":"fra","title":"Français"},"disposition":{"default":1}},
           {"index":2,"codec_type":"subtitle","codec_name":"subrip","tags":{"language":"eng"},"disposition":{"forced":1}},
           {"index":3,"codec_type":"video","codec_name":"mjpeg","width":100,"height":100,"disposition":{"attached_pic":1}},
-          {"index":4,"codec_type":"attachment","codec_name":"ttf","tags":{"filename":"Police.ttf","mimetype":"application/x-truetype-font"}}
+          {"index":4,"codec_type":"attachment","codec_name":"ttf","extradata_hash":"SHA256:fixture-font","tags":{"filename":"Police.ttf","mimetype":"application/x-truetype-font"}}
         ],"format":{"format_name":"mov,mp4,m4a,3gp,3g2,mj2","duration":"N/A","tags":{"title":"Vacances","creation_time":"2020-06-01T10:00:00Z"}},
         "chapters":[{"id":0,"time_base":"1/1000","start_time":"0.0","end_time":"12.5","tags":{"title":"Début"}}]}
         """;
@@ -134,6 +134,17 @@ public sealed class AdaptiveMediaIntegrityTests
         var noChapter = source with { Technical = source.Technical with { Metadata = new Dictionary<string, string>(source.Technical.Metadata) { ["pixseek:chapters"] = "[]" } } };
         Assert.Throws<InvalidDataException>(() => CompressionVerificationService.ValidateVideoMetadata(source, noChapter, plan, true));
     }
+
+    [Fact]
+    public void VideoValidation_RejectsChangedAttachmentAndLostSpatialMetadata()
+    {
+        var source = FfprobeService.ParseJson(ProbeJson);
+        var plan = new CompressionPlan(".mkv", "ffmpeg", [], false, false) { CodecId = "hevc" };
+        var changed = source with { Technical = source.Technical with { Streams = source.Technical.Streams.Select(s => s.CodecType == "attachment" ? s with { ExtraDataHash = "SHA256:different" } : s).ToArray() } };
+        Assert.Throws<InvalidDataException>(() => CompressionVerificationService.ValidateVideoMetadata(source, changed, plan, true));
+        changed = source with { Technical = source.Technical with { Streams = source.Technical.Streams.Select(s => s.Index == 0 ? s with { SideDataJson = "[]" } : s).ToArray() } };
+        Assert.Throws<InvalidDataException>(() => CompressionVerificationService.ValidateVideoMetadata(source, changed, plan, true));
+    }
 }
 
 public sealed class AdaptiveMediaIntegrityIntegrationTests(TestEnvironment e) : IClassFixture<TestEnvironment>
@@ -197,9 +208,11 @@ public sealed class AdaptiveMediaIntegrityIntegrationTests(TestEnvironment e) : 
     [Fact]
     public async Task LosslessVerification_ChecksActualAlphaAndIccAndRejectsAlteredAlpha()
     {
-        var source = Path.Combine(e.Work, "integrity-alpha-" + Guid.NewGuid().ToString("N") + ".png");
+        var source = Path.Combine(e.Work, "integrity-alpha-" + Guid.NewGuid().ToString("N") + ".jxl");
         var output = source + ".jxl";
-        await e.Images.RunAsync(["-size", "64x48", "xc:none", "-fill", "#ff003380", "-draw", "rectangle 8,8 50,40", "-profile", Path.Combine(e.Tools.NativeDirectory, "sRGB.icc"), source]);
+        var png = source + ".png";
+        await e.Images.RunAsync(["-size", "64x48", "xc:none", "-fill", "#ff003380", "-draw", "rectangle 8,8 50,40", "-profile", Path.Combine(e.Tools.NativeDirectory, "sRGB.icc"), png]);
+        await e.Runner.CheckedAsync(e.Tools.PathFor("cjxl"), [png, source, "-d", "0", "-e", "3"]);
         var original = await e.Images.IdentifyAsync(source);
         await e.Runner.CheckedAsync(e.Tools.PathFor("cjxl"), [source, output, "-d", "0", "-e", "3"]);
         var plan = new CompressionPlan(".jxl", "cjxl", [], true, false) { CodecId = "jxl", Width = 64, Height = 48, NormalizesOrientation = true };

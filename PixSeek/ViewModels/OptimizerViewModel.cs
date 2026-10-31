@@ -114,8 +114,8 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
         VideoRateControl = VideoBackendVisible ? SelectedVideoEncoder?.RateControl : null,
         ImageNativeQuality = ImageBackendVisible ? ImageQuality : null,
         VideoNativeQuality = VideoBackendVisible ? VideoQuality : null,
-        Recursive = Recursive,
-        KeepMetadata = KeepMetadata,
+        Recursive = true,
+        KeepMetadata = true,
         KeepOnlySmaller = KeepOnlySmaller,
         LegacyOptionsJson = settings.Current.Compression.LegacyOptionsJson
     };
@@ -208,9 +208,9 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
             if (!VideoCodecs.Any(c => c.Id == VideoCodec)) VideoCodec = "auto";
             SelectedImageCodec = ImageCodecs.Single(c => c.Id == ImageCodec);
             SelectedVideoCodec = VideoCodecs.Single(c => c.Id == VideoCodec);
-            KeepMetadata = options.KeepMetadata;
+            KeepMetadata = true;
             KeepOnlySmaller = options.KeepOnlySmaller;
-            Recursive = options.Recursive;
+            Recursive = true;
             _imageAutoQuality = Math.Clamp(options.ImageAutoQuality, 0, 100);
             _videoAutoQuality = Math.Clamp(options.VideoAutoQuality, 0, 100);
             PopulateEncoders(ImageEncoders, ImageCodec);
@@ -322,7 +322,7 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
     }
     private void SetDefaultDestination()
     {
-        Destination = string.IsNullOrWhiteSpace(SourceDirectory) ? "" : Path.Combine(SourceDirectory, MediaFormats.OutputFolder);
+        Destination = string.IsNullOrWhiteSpace(SourceDirectory) ? "" : ExportPathPolicy.DefaultDestination(SourceDirectory);
         _customDestination = false;
     }
     partial void OnDestinationChanged(string value) { _customDestination = true; OnPropertyChanged(nameof(CanValidate)); }
@@ -438,10 +438,11 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
             }), files, destination);
             foreach (var item in report.Items)
                 Results.Add(item);
-            ResultSummary = TranslationService.Text("EncodingSummary", MediaFormats.Size(report.OriginalBytes), MediaFormats.Size(report.FinalBytes), MediaFormats.Size(report.SavedBytes), report.Items.Count(r => r.Status == "Converti"), report.Items.Count(r => r.Status is "Ignoré" or "Aucun gain"), report.Items.Count(r => r.Status == "Échec"));
+            ResultSummary = TranslationService.Text("EncodingSummary", MediaFormats.Size(report.OriginalBytes), MediaFormats.Size(report.FinalBytes), MediaFormats.Size(report.SavedBytes), report.ConvertedCount, report.CopiedCount, report.Items.Count(r => !r.IsExported));
+            if (!report.IsComplete) ResultSummary += "\n" + TranslationService.Text("ExportIncomplete") + " " + report.CompletionIssue;
             Progress = 100;
             PhaseText = EstimatedRemainingText = "";
-            ProgressText = TranslationService.Text("EncodingFinished");
+            ProgressText = TranslationService.Text(report.IsComplete ? "EncodingFinished" : "ExportIncomplete");
         }
         catch (OperationCanceledException)
         {
@@ -467,6 +468,7 @@ public partial class OptimizerViewModel(MediaCompressionService compression, Set
         "trial" or "trials" or "sampling" or "metrics" => TranslationService.Text("CompressionPhaseTrials"),
         "encoding" or "encode" => TranslationService.Text("CompressionPhaseEncoding"),
         "verification" or "verify" => TranslationService.Text("CompressionPhaseVerification"),
+        "copying" => TranslationService.Text("CopyingOriginal"),
         "publish" or "publishing" => TranslationService.Text("CompressionPhasePublish"),
         _ => phase ?? ""
     };

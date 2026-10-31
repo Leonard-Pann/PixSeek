@@ -95,6 +95,7 @@ public sealed record CompressionOptions
 public sealed record EncodingRequest(string SourcePath, string DestinationPath, MediaType MediaType, MediaMetadata Metadata, CompressionOptions Options)
 {
     public bool DestinationIsStem { get; init; }
+    public string? OriginalDestinationPath { get; init; }
 }
 public sealed record EncodingProgress(double Fraction, string Message)
 {
@@ -104,11 +105,18 @@ public sealed record EncodingProgress(double Fraction, string Message)
 public sealed record EncodingResult(string SourcePath, string? DestinationPath, long OriginalBytes, long OutputBytes, string Status, string Verification, string? Error = null)
 {
     public CompressionDecision? Decision { get; init; }
+    public string? SourceSha256 { get; init; }
+    public string? OutputSha256 { get; init; }
+    public bool IsExported => DestinationPath != null && Status is "Converti" or "Copié";
     public long SavedBytes => Status == "Converti" ? OriginalBytes - OutputBytes : 0;
 }
 
 public sealed record CompressionReport(long JobId, string Destination, IReadOnlyList<EncodingResult> Items)
 {
+    public bool IsComplete => CompletionIssue == null && Items.All(x => x.IsExported && !string.IsNullOrEmpty(x.OutputSha256));
+    public string? CompletionIssue { get; init; }
+    public int CopiedCount => Items.Count(x => x.Status == "Copié");
+    public int ConvertedCount => Items.Count(x => x.Status == "Converti");
     public long OriginalBytes => Items.Sum(x => x.OriginalBytes);
     public long FinalBytes => Items.Sum(x => x.Status == "Converti" ? x.OutputBytes : x.OriginalBytes);
     public long SavedBytes => OriginalBytes - FinalBytes;
